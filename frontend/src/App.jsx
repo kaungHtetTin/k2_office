@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart3, Bell, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleDollarSign, Eye, FileText, FolderKanban, Globe2, Landmark, LayoutDashboard, LoaderCircle, LogOut, Menu, MinusCircle, Pencil, Plus, ReceiptText, RefreshCw, RotateCcw, Settings as SettingsIcon, ShoppingCart, Trash2, Users as UsersIcon, WalletCards, X } from 'lucide-react'
+import { BarChart3, Bell, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleDollarSign, Eye, FileText, FolderKanban, Globe2, Landmark, LayoutDashboard, ListFilter, LoaderCircle, LogOut, Menu, MinusCircle, Pencil, Plus, ReceiptText, RefreshCw, RotateCcw, Settings as SettingsIcon, ShoppingCart, Trash2, Users as UsersIcon, WalletCards, X } from 'lucide-react'
 import './App.css'
 import { API_BASE_URL } from './api/apiClient'
 
@@ -316,14 +316,13 @@ function Projects({ api, canWrite }) {
   return (
     <section className="page">
       <Toolbar title="Projects" canWrite={canWrite} onAdd={() => { setError(''); setEditing(emptyProject) }} />
-      <div className="filters">
+      <FilterDrawer title="Project filters" activeCount={[search, status, paymentStatus, dateFrom, dateTo].filter(Boolean).length} onClear={() => { setSearch(''); setStatus(''); setPaymentStatus(''); setDateFrom(''); setDateTo(''); setPage(1) }}><div className="filters">
         <input placeholder="Search project or customer" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} />
         <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }}><option value="">All statuses</option>{projectStatuses.map((x) => <option key={x}>{x}</option>)}</select>
         <select value={paymentStatus} onChange={(e) => { setPaymentStatus(e.target.value); setPage(1) }}><option value="">All payment</option>{paymentStatuses.map((x) => <option key={x}>{x}</option>)}</select>
         <input aria-label="Created from" type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} />
         <input aria-label="Created to" type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }} />
-        {(search || status || paymentStatus || dateFrom || dateTo) && <button onClick={() => { setSearch(''); setStatus(''); setPaymentStatus(''); setDateFrom(''); setDateTo(''); setPage(1) }}>Clear</button>}
-      </div>
+      </div></FilterDrawer>
       {error && <div className="alert">{error}</div>}
       {loading ? <Loading label="Loading projects" /> : <Table rows={rows} columns={projectColumns} actions={(row) => (
         <>
@@ -477,12 +476,12 @@ function GenericModule({ api, title, endpoint, fields, columns, options = {}, fi
   return (
     <section className="page">
       <Toolbar title={title} canWrite={canWrite} onAdd={add} />
-      {!!filters.length && <div className="filters">{filters.map((name) => {
+      {!!filters.length && <FilterDrawer title={`${title} filters`} activeCount={Object.values(filterValues).filter(Boolean).length} onClear={() => { setFilterValues(Object.fromEntries(filters.map((name) => [name, '']))); setPage(1) }}><div className="filters">{filters.map((name) => {
         if (name === 'project_id') return <ProjectPicker api={api} projects={projects} key={name} value={filterValues[name]} onChange={(value) => setFilter(name, value)} allOption />
         if (name === 'financial_account_id') return <select aria-label="Received by" key={name} value={filterValues[name]} onChange={(e) => setFilter(name, e.target.value)}><option value="">All receivers</option>{financialAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select>
         if (options[name]) return <select aria-label={label(name)} key={name} value={filterValues[name]} onChange={(e) => setFilter(name, e.target.value)}><option value="">All {label(name).toLowerCase()}</option>{options[name].map((value) => <option key={value}>{value}</option>)}</select>
         return <input key={name} aria-label={label(name)} type={name.includes('date') ? 'date' : 'search'} placeholder={name === 'search' ? `Search ${title.toLowerCase()}` : ''} value={filterValues[name]} onChange={(e) => setFilter(name, e.target.value)} />
-      })}{Object.values(filterValues).some(Boolean) && <button onClick={() => { setFilterValues(Object.fromEntries(filters.map((name) => [name, '']))); setPage(1) }}>Clear</button>}</div>}
+      })}</div></FilterDrawer>}
       {error && <div className="alert">{error}</div>}
       {loading ? <Loading label={`Loading ${title.toLowerCase()}`} /> : <Table rows={rows} columns={columns} actions={(row) => (
         <>
@@ -579,7 +578,7 @@ function DomainBilling({ api, canWrite }) {
 
   return <section className="page domain-billing-page">
     <Toolbar title="Domain Billing" canWrite={canWrite} onAdd={() => { setError(''); setEditing({ project_id: '', domain_name: '', period_label: '', quote_date: today(), customer_price: '', customer_due_date: '', purchase_status: 'Quoted', reminder_days_before_due: 30, notes: '' }) }} />
-    <div className="filters"><input type="search" placeholder="Search domain, project or registrar" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} /><ProjectPicker api={api} projects={projects} value={filters.project_id} onChange={(value) => setFilter('project_id', value)} allOption /><select value={filters.payment_status} onChange={(e) => setFilter('payment_status', e.target.value)}><option value="">All payment states</option>{['Not Priced','Unpaid','Partially Paid','Paid'].map((value) => <option key={value}>{value}</option>)}</select><select value={filters.purchase_status} onChange={(e) => setFilter('purchase_status', e.target.value)}><option value="">All purchase states</option>{['Not Purchased','Active','Expired','Cancelled'].map((value) => <option key={value}>{value}</option>)}</select><input aria-label="Domain quote date from" type="date" value={filters.date_from} onChange={(e) => setFilter('date_from', e.target.value)} /><input aria-label="Domain quote date to" type="date" value={filters.date_to} onChange={(e) => setFilter('date_to', e.target.value)} />{Object.values(filters).some(Boolean) && <button onClick={() => { setFilters(emptyFilters); setPage(1) }}>Clear</button>}</div>
+    <FilterDrawer title="Domain billing filters" activeCount={Object.values(filters).filter(Boolean).length} onClear={() => { setFilters(emptyFilters); setPage(1) }}><div className="filters"><input type="search" placeholder="Search domain, project or registrar" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} /><ProjectPicker api={api} projects={projects} value={filters.project_id} onChange={(value) => setFilter('project_id', value)} allOption /><select value={filters.payment_status} onChange={(e) => setFilter('payment_status', e.target.value)}><option value="">All payment states</option>{['Not Priced','Unpaid','Partially Paid','Paid'].map((value) => <option key={value}>{value}</option>)}</select><select value={filters.purchase_status} onChange={(e) => setFilter('purchase_status', e.target.value)}><option value="">All purchase states</option>{['Not Purchased','Active','Expired','Cancelled'].map((value) => <option key={value}>{value}</option>)}</select><input aria-label="Domain quote date from" type="date" value={filters.date_from} onChange={(e) => setFilter('date_from', e.target.value)} /><input aria-label="Domain quote date to" type="date" value={filters.date_to} onChange={(e) => setFilter('date_to', e.target.value)} /></div></FilterDrawer>
     {error && <div className="alert">{error}</div>}
     {loading ? <Loading label="Loading domain billing" /> : <Table rows={rows} columns={columns} actions={(row) => <>
       <ActionButton label="View annual domain record" icon={Eye} onClick={() => refreshDetail(row.id)} />
@@ -700,7 +699,7 @@ function Invoices({ api, canWrite }) {
 
   return <section className="page">
     <Toolbar title="Invoices" canWrite={canWrite} onAdd={create} />
-    <div className="filters"><input type="search" placeholder="Search invoices" value={filters.search} onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setPage(1) }} /><ProjectPicker api={api} projects={projects} value={filters.project_id} onChange={(value) => { setFilters({ ...filters, project_id: value }); setPage(1) }} allOption /><select value={filters.invoice_type} onChange={(e) => { setFilters({ ...filters, invoice_type: e.target.value }); setPage(1) }}><option value="">All invoice types</option>{invoiceTypes.map((type) => <option key={type}>{type}</option>)}</select><select value={filters.status} onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setPage(1) }}><option value="">All statuses</option>{['Draft','Sent','Partially Paid','Paid','Overdue','Cancelled'].map((status) => <option key={status}>{status}</option>)}</select><input aria-label="Invoice date from" type="date" value={filters.date_from} onChange={(e) => { setFilters({ ...filters, date_from: e.target.value }); setPage(1) }} /><input aria-label="Invoice date to" type="date" value={filters.date_to} onChange={(e) => { setFilters({ ...filters, date_to: e.target.value }); setPage(1) }} />{Object.values(filters).some(Boolean) && <button onClick={() => { setFilters({ search: '', project_id: '', status: '', invoice_type: '', date_from: '', date_to: '' }); setPage(1) }}>Clear</button>}</div>
+    <FilterDrawer title="Invoice filters" activeCount={Object.values(filters).filter(Boolean).length} onClear={() => { setFilters({ search: '', project_id: '', status: '', invoice_type: '', date_from: '', date_to: '' }); setPage(1) }}><div className="filters"><input type="search" placeholder="Search invoices" value={filters.search} onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setPage(1) }} /><ProjectPicker api={api} projects={projects} value={filters.project_id} onChange={(value) => { setFilters({ ...filters, project_id: value }); setPage(1) }} allOption /><select value={filters.invoice_type} onChange={(e) => { setFilters({ ...filters, invoice_type: e.target.value }); setPage(1) }}><option value="">All invoice types</option>{invoiceTypes.map((type) => <option key={type}>{type}</option>)}</select><select value={filters.status} onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setPage(1) }}><option value="">All statuses</option>{['Draft','Sent','Partially Paid','Paid','Overdue','Cancelled'].map((status) => <option key={status}>{status}</option>)}</select><input aria-label="Invoice date from" type="date" value={filters.date_from} onChange={(e) => { setFilters({ ...filters, date_from: e.target.value }); setPage(1) }} /><input aria-label="Invoice date to" type="date" value={filters.date_to} onChange={(e) => { setFilters({ ...filters, date_to: e.target.value }); setPage(1) }} /></div></FilterDrawer>
     {error && <div className="alert">{error}</div>}
     {loading ? <Loading label="Loading invoices" /> : <Table rows={rows} columns={invoiceColumns} actions={(row) => <><ActionButton label="Preview invoice" icon={Eye} onClick={() => show(row.id)} />{canWrite && <ActionButton label="Edit invoice" icon={Pencil} onClick={() => edit(row.id)} />}{canWrite && <ActionButton label="Delete invoice" icon={Trash2} danger onClick={() => remove(row.id)} />}</>} />}
     <Pagination value={pagination} onChange={setPage} />
@@ -940,8 +939,7 @@ function UserFinancial({ api, canWrite, canManage }) {
     <div className="toolbar"><h2>User Financial</h2><div className="actions">{canManage && <button onClick={() => { setError(''); setAccountEditing({ name: '', opening_balance: 0, status: 'Active' }) }}><Plus size={16} />Add Account</button>}{canWrite && <><button disabled={activeAccountCount < 1} onClick={() => { setError(''); setEditing({ transaction_type: 'Use', transaction_date: today(), from_account_id: '', to_account_id: '', amount: '', notes: '' }) }}>Use Money</button><button className="primary" disabled={activeAccountCount < 2} onClick={() => { setError(''); setEditing({ transaction_type: 'Transfer', transaction_date: today(), from_account_id: '', to_account_id: '', amount: '', notes: '' }) }}>Transfer</button></>}</div></div>
     <div className="summary-grid financial-summary">{accounts.map((account) => <Card key={account.id} label={account.name} value={currency(account.balance)} />)}<Card label="Combined Balance" value={currency(totalBalance)} /></div>
     <Panel title="Financial Accounts"><PaginatedTable rows={accounts} columns={accountColumns} actions={canManage ? (account) => <><ActionButton label="Edit account" icon={Pencil} onClick={() => { setError(''); setAccountEditing(account) }} /><ActionButton label="Delete account" icon={Trash2} danger onClick={() => removeAccount(account.id)} /></> : null} /></Panel>
-    <div className="period-control" role="group" aria-label="Financial period">{[['today','Today'],['week','Week'],['month','Month'],['lifetime','Lifetime']].map(([value, text]) => <button key={value} className={period === value ? 'active' : ''} onClick={() => { setPeriod(value); setPage(1) }}>{text}</button>)}</div>
-    <div className="filters"><input type="search" placeholder="Search notes or project" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} /><select value={filters.transaction_type} onChange={(e) => setFilter('transaction_type', e.target.value)}><option value="">All movements</option><option>Receive</option><option>Use</option><option>Transfer</option></select><select value={filters.account_id} onChange={(e) => setFilter('account_id', e.target.value)}><option value="">All accounts</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select><input aria-label="Date from" type="date" value={dates.date_from} onChange={(e) => { setPeriod('custom'); setFilter('date_from', e.target.value) }} /><input aria-label="Date to" type="date" value={dates.date_to} onChange={(e) => { setPeriod('custom'); setFilter('date_to', e.target.value) }} /></div>
+    <FilterDrawer title="Financial history filters" activeCount={Object.values(filters).filter(Boolean).length + (period !== 'month' ? 1 : 0)} onClear={() => { setFilters({ search: '', transaction_type: '', account_id: '', date_from: '', date_to: '' }); setPeriod('month'); setPage(1) }}><div className="filters"><label>Period<span className="period-control" role="group" aria-label="Financial period">{[['today','Today'],['week','Week'],['month','Month'],['lifetime','Lifetime']].map(([value, text]) => <button type="button" key={value} className={period === value ? 'active' : ''} onClick={() => { setPeriod(value); setPage(1) }}>{text}</button>)}</span></label><input type="search" placeholder="Search notes or project" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} /><select value={filters.transaction_type} onChange={(e) => setFilter('transaction_type', e.target.value)}><option value="">All movements</option><option>Receive</option><option>Use</option><option>Transfer</option></select><select value={filters.account_id} onChange={(e) => setFilter('account_id', e.target.value)}><option value="">All accounts</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select><input aria-label="Date from" type="date" value={dates.date_from} onChange={(e) => { setPeriod('custom'); setFilter('date_from', e.target.value) }} /><input aria-label="Date to" type="date" value={dates.date_to} onChange={(e) => { setPeriod('custom'); setFilter('date_to', e.target.value) }} /></div></FilterDrawer>
     {error && <div className="alert">{error}</div>}
     {loading ? <Loading label="Loading financial history" /> : <Table rows={rows} columns={columns} actions={(row) => row.transaction_type !== 'Receive' && !row.domain_billing_period_id && canWrite ? <><ActionButton label="Edit transaction" icon={Pencil} onClick={() => setEditing(row)} /><ActionButton label="Delete transaction" icon={Trash2} danger onClick={() => remove(row.id)} /></> : null} />}
     <Pagination value={pagination} onChange={setPage} />
@@ -1010,7 +1008,7 @@ function Reports({ api }) {
   const setFilter = (name, value) => { setFilters({ ...filters, [name]: value }); setPage(1) }
   return <section className="page reports-page">
     <div className="toolbar"><div><h2>Financial Reports</h2><p className="muted">Review collections, balances, expenses, fees, invoices, and profit.</p></div><div className="actions"><button onClick={() => window.print()}>Print</button><button disabled={!rows.length} onClick={() => exportCsv(rows, `${kind}.csv`)}>{data.pagination ? 'Export Page CSV' : 'Export CSV'}</button></div></div>
-    <form className="report-filters" aria-label="Financial report filters" onSubmit={(event) => event.preventDefault()}>
+    <FilterDrawer title="Financial report filters" activeCount={Object.values(filters).filter(Boolean).length + (period !== 'month' ? 1 : 0)} onClear={() => { setFilters(emptyReportFilters); setPeriod('month'); setPage(1) }}><form className="report-filters" aria-label="Financial report filters" onSubmit={(event) => event.preventDefault()}>
       <div className="report-filter-scroll"><div className="report-filter-fields">
         <label className="report-filter-kind">Report<select value={kind} onChange={(e) => { setKind(e.target.value); setPage(1); setFilters(emptyReportFilters) }}>{reportKinds.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
         <div className="report-filter-project"><ProjectPicker api={api} projects={projects} value={filters.project_id} onChange={(value) => setFilter('project_id', value)} allOption /></div>
@@ -1025,8 +1023,7 @@ function Reports({ api }) {
         {!overview && <><label className="report-filter-date">From<input type="date" value={filters.date_from} onChange={(e) => setFilter('date_from', e.target.value)} /></label><label className="report-filter-date">To<input type="date" value={filters.date_to} onChange={(e) => setFilter('date_to', e.target.value)} /></label></>}
         {overview && data.date_from && <label className="report-filter-range">Date range<output>{data.date_from} to {data.date_to}</output></label>}
       </div></div>
-      <div className="report-filter-actions"><button type="button" onClick={() => { setFilters(emptyReportFilters); setPeriod('month'); setPage(1) }}>Clear</button></div>
-    </form>
+    </form></FilterDrawer>
     {error && <div className="alert">{error}</div>}
     {loading ? <Loading label="Loading report" /> : overview ? <>
       <div className="summary-grid report-summary"><Card label="Amount Received" value={currency(data.summary?.received_amount)} /><Card label="Project Balance to Get" value={currency(data.summary?.project_outstanding_amount)} /><Card label="Domain Balance to Get" value={currency(data.summary?.domain_outstanding_amount)} /><Card label="Renewal Fees Due" value={currency(data.summary?.recurring_due_amount)} /><Card label="Total to Get" value={currency(data.summary?.total_to_collect)} /><Card label="Quoted Domain Price" value={currency(data.summary?.domain_server_price_total)} /><Card label="Registrar Cost" value={currency(data.summary?.domain_registrar_cost_total)} /></div>
@@ -1217,6 +1214,30 @@ function Panel({ title, children }) {
 function MiniList({ rows, main, sub, amount, date }) {
   if (!rows?.length) return <div className="empty small">No data yet.</div>
   return <ul className="mini-list">{rows.map((row, index) => <li key={row.id || index}><div><strong>{row[main]}</strong><span>{row[sub]} {date && `• ${row[date] || ''}`}</span></div>{amount && <b>{currency(row[amount])}</b>}</li>)}</ul>
+}
+
+function FilterDrawer({ children, title = 'Filters', activeCount = 0, onClear }) {
+  const [open, setOpen] = useState(false)
+  const drawerRef = useRef(null)
+  const triggerRef = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const trigger = triggerRef.current
+    const oldOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const close = (event) => { if (event.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', close)
+    requestAnimationFrame(() => drawerRef.current?.querySelector('input, select, button')?.focus())
+    return () => { window.removeEventListener('keydown', close); document.body.style.overflow = oldOverflow; trigger?.focus() }
+  }, [open])
+  return <>
+    <div className="filter-drawer-trigger"><button ref={triggerRef} type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}><ListFilter size={16} />Filters{activeCount > 0 && <span className="filter-count">{activeCount}</span>}</button></div>
+    {open && <div className="filter-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}><aside ref={drawerRef} className="filter-drawer" role="dialog" aria-modal="true" aria-label={title}>
+      <header><div><span>View options</span><h2>{title}</h2></div><button type="button" className="icon-btn" aria-label="Close filters" title="Close filters" onClick={() => setOpen(false)}><X size={18} /></button></header>
+      <div className="filter-drawer-body">{children}</div>
+      <footer><button type="button" disabled={!activeCount} onClick={onClear}>Clear all</button><button type="button" className="primary" onClick={() => setOpen(false)}>Done</button></footer>
+    </aside></div>}
+  </>
 }
 
 function Modal({ title, children, onClose, wide }) {
