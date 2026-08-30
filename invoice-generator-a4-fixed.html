@@ -1,0 +1,2714 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>K2 Invoice Generator</title>
+  <style>
+    :root {
+      --ink: #101827;
+      --muted: #66758d;
+      --soft: #eef2f7;
+      --line: #dce3ec;
+      --accent: #de7600;
+      --accent-dark: #8d3d0d;
+      --accent-soft: #fff3c8;
+      --panel: #ffffff;
+      --app-bg: #eef1f5;
+      --success: #16794d;
+      --danger: #b42318;
+      --shadow: 0 20px 55px rgba(15, 23, 42, .12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { color-scheme: light; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--app-bg);
+      color: var(--ink);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    button, input, textarea, select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 22px;
+      border-bottom: 1px solid rgba(255, 255, 255, .1);
+      background: rgba(16, 24, 39, .96);
+      color: white;
+      backdrop-filter: blur(16px);
+    }
+
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--accent);
+      color: white;
+      font-weight: 850;
+      letter-spacing: -.04em;
+    }
+
+    .brand-copy {
+      min-width: 0;
+    }
+
+    .brand-copy strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.15;
+    }
+
+    .brand-copy span {
+      display: block;
+      margin-top: 3px;
+      color: #aeb8c8;
+      font-size: 12px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      min-height: 38px;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 8px 13px;
+      font-size: 13px;
+      font-weight: 750;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-secondary {
+      border-color: #3a465a;
+      background: #202b3d;
+      color: white;
+    }
+
+    .btn-secondary:hover { background: #2a374b; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 8px 20px rgba(222, 118, 0, .24);
+    }
+
+    .btn-primary:hover { background: #c96b00; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(310px, 390px) minmax(0, 1fr);
+      min-height: calc(100vh - 71px);
+    }
+
+    .editor {
+      position: relative;
+      z-index: 2;
+      border-right: 1px solid #d8dee8;
+      background: #f8fafc;
+    }
+
+    .editor-scroll {
+      position: sticky;
+      top: 71px;
+      max-height: calc(100vh - 71px);
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .intro {
+      margin-bottom: 16px;
+    }
+
+    .eyebrow {
+      margin: 0 0 5px;
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .intro h1 {
+      margin: 0;
+      font-size: 23px;
+      letter-spacing: -.035em;
+    }
+
+    .intro p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .form-card {
+      margin-bottom: 12px;
+      overflow: hidden;
+      border: 1px solid #dde4ed;
+      border-radius: 14px;
+      background: white;
+      box-shadow: 0 3px 12px rgba(15, 23, 42, .035);
+    }
+
+    .form-card summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 14px;
+      list-style: none;
+      color: #25324a;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .form-card summary::-webkit-details-marker { display: none; }
+    .form-card summary::after {
+      content: "＋";
+      color: var(--accent);
+      font-size: 17px;
+      font-weight: 500;
+    }
+
+    .form-card[open] summary {
+      border-bottom: 1px solid #edf0f5;
+    }
+
+    .form-card[open] summary::after { content: "−"; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .field {
+      min-width: 0;
+    }
+
+    .field.full { grid-column: 1 / -1; }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: #54637a;
+      font-size: 11px;
+      font-weight: 780;
+      letter-spacing: .025em;
+    }
+
+    .field input,
+    .field textarea,
+    .field select {
+      width: 100%;
+      border: 1px solid #d5dce7;
+      border-radius: 9px;
+      outline: 0;
+      background: #fff;
+      color: var(--ink);
+      padding: 9px 10px;
+      font-size: 13px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .field textarea {
+      min-height: 68px;
+      resize: vertical;
+    }
+
+    .field input:focus,
+    .field textarea:focus,
+    .field select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(222, 118, 0, .12);
+    }
+
+    .money-wrap {
+      position: relative;
+    }
+
+    .money-wrap input { padding-right: 45px; }
+
+    .money-wrap span {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      color: #8894a7;
+      font-size: 10px;
+      font-weight: 800;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .quick-action {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      grid-column: 1 / -1;
+      margin-top: -2px;
+      border-radius: 9px;
+      background: #fff8e7;
+      padding: 9px 10px;
+      color: #7b4a0f;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .quick-action button {
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: 7px;
+      background: #ffe1a3;
+      color: #6f3f08;
+      padding: 6px 8px;
+      font-size: 10px;
+      font-weight: 850;
+    }
+
+
+    .section-tools {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      grid-column: 1 / -1;
+    }
+
+    .section-tools p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .mini-btn {
+      display: inline-flex;
+      min-height: 32px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid #d5dce7;
+      border-radius: 8px;
+      background: #fff;
+      color: #34425a;
+      padding: 6px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .mini-btn:hover {
+      border-color: #b7c2d0;
+      background: #f8fafc;
+    }
+
+    .mini-btn.accent {
+      border-color: #ffd39d;
+      background: #fff7eb;
+      color: #9a5204;
+    }
+
+    .line-items-editor {
+      display: grid;
+      gap: 9px;
+      grid-column: 1 / -1;
+    }
+
+    .line-item-editor {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr) 34px;
+      align-items: end;
+      gap: 8px;
+      border: 1px solid #e2e7ef;
+      border-radius: 10px;
+      background: #fbfcfe;
+      padding: 10px;
+    }
+
+    .line-item-editor .item-field {
+      min-width: 0;
+    }
+
+    .line-item-editor .item-description-field {
+      grid-column: 1 / -1;
+    }
+
+    .line-item-editor .item-price-field {
+      grid-column: 2;
+    }
+
+    .line-item-editor .remove-item {
+      grid-column: 3;
+    }
+
+    .line-item-editor label {
+      display: block;
+      margin-bottom: 5px;
+      color: #758197;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    .line-item-editor input {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid #d5dce7;
+      border-radius: 8px;
+      outline: 0;
+      background: #fff;
+      padding: 8px 9px;
+      font-size: 12px;
+    }
+
+    .line-item-editor input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(222, 118, 0, .1);
+    }
+
+    .remove-item {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border: 1px solid #f1c7c4;
+      border-radius: 8px;
+      background: #fff5f4;
+      color: var(--danger);
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .remove-item:disabled {
+      opacity: .35;
+      cursor: not-allowed;
+    }
+
+    .totals-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      grid-column: 1 / -1;
+    }
+
+    .total-chip {
+      border: 1px solid #e2e7ef;
+      border-radius: 9px;
+      background: #f8fafc;
+      padding: 9px 10px;
+    }
+
+    .total-chip span {
+      display: block;
+      color: #7a879a;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .total-chip strong {
+      display: block;
+      margin-top: 3px;
+      color: #26344c;
+      font-size: 12px;
+    }
+
+    .quick-percentages {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      grid-column: 1 / -1;
+      margin-top: -2px;
+    }
+
+    .quick-percentages button {
+      border: 1px solid #e0e6ee;
+      border-radius: 999px;
+      background: #f8fafc;
+      color: #526078;
+      padding: 5px 9px;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .quick-percentages button:hover {
+      border-color: #ffc77f;
+      background: #fff6e8;
+      color: #8e4a04;
+    }
+
+    .summary-row.hidden {
+      display: none;
+    }
+
+    .format-panel {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .format-section {
+      border: 1px solid #e2e7ef;
+      border-radius: 11px;
+      background: #fbfcfe;
+      padding: 11px;
+    }
+
+    .format-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+      color: #34425a;
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .025em;
+      text-transform: uppercase;
+    }
+
+    .format-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .format-grid .field label {
+      font-size: 9px;
+      color: #758197;
+      text-transform: uppercase;
+    }
+
+    .format-grid .field input,
+    .format-grid .field select {
+      padding: 7px 8px;
+      font-size: 11px;
+    }
+
+    .format-color-row {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+
+    .format-color-row input[type="color"] {
+      width: 42px;
+      height: 34px;
+      padding: 3px;
+      cursor: pointer;
+    }
+
+    .format-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .format-help {
+      margin: 0;
+      border-radius: 9px;
+      background: #f4f7fb;
+      color: #64748b;
+      padding: 9px 10px;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    .format-selected {
+      outline: 2px dashed var(--accent) !important;
+      outline-offset: 3px;
+    }
+
+    .invoice-sheet.format-pick-mode [data-format-target] {
+      cursor: pointer;
+    }
+
+    .invoice-table .item-description {
+      overflow-wrap: anywhere;
+    }
+
+    .invoice-table .item-amount {
+      white-space: nowrap;
+    }
+
+    .validation {
+      display: none;
+      margin: 8px 0 0;
+      border: 1px solid #f4c7c2;
+      border-radius: 10px;
+      background: #fff2f0;
+      color: var(--danger);
+      padding: 10px 12px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .validation.show { display: block; }
+
+    .preview-area {
+      min-width: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(222, 118, 0, .06), transparent 33%),
+        #e9edf2;
+    }
+
+    .preview-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 22px 0;
+      color: #637087;
+      font-size: 12px;
+    }
+
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 750;
+    }
+
+    .live-indicator::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #1faa72;
+      box-shadow: 0 0 0 4px rgba(31, 170, 114, .12);
+    }
+
+    .preview-scroll {
+      overflow: auto;
+      padding: 18px 22px 48px;
+    }
+
+    /* The preview always represents one physical A4 page. On narrow screens the
+       whole page is scaled down as a unit instead of reflowing into a mobile layout. */
+    .invoice-stage {
+      position: relative;
+      width: 210mm;
+      height: 297mm;
+      margin: 0 auto;
+    }
+
+    .invoice-sheet {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 210mm;
+      height: 297mm;
+      min-height: 297mm;
+      max-height: 297mm;
+      margin: 0;
+      overflow: hidden;
+      background: white;
+      color: var(--ink);
+      font-family: var(--invoice-font-family, Inter, "Segoe UI", Arial, sans-serif);
+      box-shadow: var(--shadow);
+      transform-origin: top left;
+    }
+
+    .invoice-inner {
+      display: flex;
+      width: 100%;
+      min-height: 297mm;
+      flex-direction: column;
+      padding: 15mm 14mm 11mm;
+      transform-origin: top left;
+    }
+
+    .invoice-head {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+      gap: 24px;
+    }
+
+    .issuer-name {
+      margin: 0;
+      font-size: 27px;
+      font-weight: 850;
+      letter-spacing: -.04em;
+    }
+
+    .issuer-name .accent-word {
+      color: var(--accent);
+    }
+
+    .issuer-tagline {
+      margin: 7px 0 0;
+      color: #6e7d94;
+      font-size: 11px;
+    }
+
+    .invoice-title {
+      margin: 0;
+      text-align: right;
+      font-size: 33px;
+      font-weight: 900;
+      letter-spacing: -.035em;
+    }
+
+    .invoice-subtitle {
+      margin: 6px 0 0;
+      text-align: right;
+      color: #637087;
+      font-size: 12px;
+    }
+
+    .invoice-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      margin-top: 28mm;
+    }
+
+    .meta-block.right { text-align: right; }
+
+    .meta-label {
+      margin: 0 0 9px;
+      color: #93a0b5;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    .meta-value {
+      margin: 0;
+      color: #53627a;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .meta-value.strong {
+      color: var(--ink);
+      font-size: 14px;
+    }
+
+    .payment-callout {
+      position: relative;
+      margin-top: 12mm;
+      min-height: 32mm;
+      border-left: 4px solid var(--accent);
+      border-radius: 3px;
+      background: var(--accent-soft);
+      padding: 12mm 10mm 6mm 12mm;
+    }
+
+    .payment-callout::before {
+      content: "!";
+      position: absolute;
+      top: 6mm;
+      left: 6mm;
+      display: grid;
+      width: 15px;
+      height: 15px;
+      place-items: center;
+      border-radius: 50%;
+      background: #a34e13;
+      color: white;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .payment-message {
+      margin: 0;
+      color: #c4600c;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .amount-due {
+      margin: 9mm 0 0;
+      color: var(--accent-dark);
+      font-size: 15px;
+      font-weight: 850;
+    }
+
+    .invoice-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .invoice-table col:nth-child(1) { width: 10%; }
+    .invoice-table col:nth-child(2) { width: 61%; }
+    .invoice-table col:nth-child(3) { width: 9%; }
+    .invoice-table col:nth-child(4) { width: 20%; }
+
+    .invoice-table th {
+      border-bottom: 1px solid var(--line);
+      background: #f6f8fb;
+      padding: 4mm 2mm;
+      color: #1f2937;
+      font-size: 10px;
+      font-weight: 500;
+      text-align: left;
+    }
+
+    .invoice-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 7mm 2mm;
+      color: #53627a;
+      font-size: 12px;
+      vertical-align: top;
+    }
+
+    .invoice-table th:nth-child(3),
+    .invoice-table td:nth-child(3) { text-align: center; }
+
+    .invoice-table th:last-child,
+    .invoice-table td:last-child { text-align: right; }
+
+    .summary-area {
+      width: 50%;
+      margin: 10mm 0 0 auto;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-bottom: 5px;
+      color: #53627a;
+      font-size: 12px;
+      line-height: 1.45;
+      text-align: right;
+    }
+
+    .summary-row span:first-child { white-space: nowrap; }
+    .summary-row strong { font-weight: 500; }
+
+    .balance-row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16mm;
+      border-top: 2px solid var(--ink);
+      padding-top: 5mm;
+    }
+
+    .balance-label {
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 850;
+    }
+
+    .balance-value {
+      color: var(--accent);
+      font-size: 16px;
+      font-weight: 900;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .invoice-footer {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 22mm;
+      margin-top: auto;
+      padding-top: 22mm;
+    }
+
+    .footer-title {
+      margin: 0 0 8mm;
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .payment-method-title {
+      margin: 0 0 6mm;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .footer-text,
+    .contact-list {
+      margin: 0;
+      color: #53627a;
+      font-size: 10px;
+      line-height: 1.75;
+    }
+
+    .contact-list {
+      display: grid;
+      gap: 2px;
+      list-style: none;
+      padding: 0;
+    }
+
+    .contact-list li {
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr);
+      gap: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    .contact-icon {
+      color: var(--accent);
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .print-note {
+      color: #7c889a;
+      font-size: 11px;
+    }
+
+    .preview-status-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px 12px;
+    }
+
+    .a4-fit-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #cfe8dc;
+      border-radius: 999px;
+      background: #effaf5;
+      color: #16794d;
+      padding: 5px 9px;
+      font-size: 10px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .a4-fit-status::before {
+      content: "✓";
+      display: grid;
+      width: 15px;
+      height: 15px;
+      place-items: center;
+      border-radius: 50%;
+      background: #16794d;
+      color: white;
+      font-size: 9px;
+    }
+
+    .a4-fit-status.tight {
+      border-color: #f1d6aa;
+      background: #fff8e7;
+      color: #8a4c09;
+    }
+
+    .a4-fit-status.tight::before {
+      content: "↘";
+      background: #c46b0b;
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 100;
+      max-width: 320px;
+      border-radius: 11px;
+      background: #132238;
+      color: white;
+      padding: 11px 14px;
+      box-shadow: 0 18px 44px rgba(15, 23, 42, .2);
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 1050px) {
+      .workspace { grid-template-columns: 340px minmax(0, 1fr); }
+    }
+
+    @media (max-width: 820px) {
+      .app-header {
+        position: static;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .toolbar {
+        width: 100%;
+        justify-content: stretch;
+      }
+
+      .toolbar .btn { flex: 1 1 auto; }
+      .workspace { display: block; }
+      .editor { border-right: 0; border-bottom: 1px solid #d8dee8; }
+      .editor-scroll { position: static; max-height: none; }
+      .preview-toolbar { padding-left: 16px; padding-right: 16px; }
+      .preview-scroll { padding: 14px 14px 36px; }
+      .preview-status-group { justify-content: flex-start; }
+    }
+
+    @media (max-width: 520px) {
+      .app-header { padding: 13px 14px; }
+      .brand-copy span { display: none; }
+      .editor-scroll { padding: 15px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .field.full, .quick-action, .section-tools, .line-items-editor,
+      .totals-strip, .quick-percentages { grid-column: 1; }
+      .preview-toolbar { align-items: flex-start; flex-direction: column; }
+      .line-item-editor {
+        grid-template-columns: 78px minmax(0, 1fr) 34px;
+      }
+      .totals-strip { grid-template-columns: 1fr; }
+      .format-grid { grid-template-columns: 1fr; }
+    }
+
+    @media print {
+      @page {
+        size: A4;
+        margin: 0;
+      }
+
+      html, body {
+        width: 210mm;
+        height: 297mm;
+        overflow: hidden;
+        background: white;
+      }
+
+      .app-header,
+      .editor,
+      .preview-toolbar,
+      .toast {
+        display: none !important;
+      }
+
+      .workspace,
+      .preview-area,
+      .preview-scroll {
+        display: block;
+        width: 210mm;
+        height: 297mm;
+        min-height: 297mm;
+        max-height: 297mm;
+        overflow: hidden;
+        background: white;
+        padding: 0;
+      }
+
+      .invoice-stage {
+        position: relative;
+        width: 210mm !important;
+        height: 297mm !important;
+        margin: 0 !important;
+        overflow: hidden;
+      }
+
+      .invoice-sheet {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 210mm;
+        height: 297mm;
+        min-height: 297mm;
+        max-height: 297mm;
+        margin: 0;
+        overflow: hidden;
+        box-shadow: none;
+        transform: none !important;
+        break-after: avoid-page;
+        page-break-after: avoid;
+      }
+
+      .invoice-inner {
+        padding: 15mm 14mm 11mm;
+      }
+
+      .invoice-head {
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+
+      .invoice-title,
+      .invoice-subtitle,
+      .meta-block.right {
+        text-align: right;
+      }
+
+      .invoice-meta {
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        margin-top: 28mm;
+      }
+
+      .payment-callout {
+        min-height: 32mm;
+        margin-top: 12mm;
+        padding: 12mm 10mm 6mm 12mm;
+      }
+
+      .payment-callout::before {
+        top: 6mm;
+        left: 6mm;
+      }
+
+      .amount-due { margin-top: 9mm; }
+
+      .summary-area {
+        width: 50%;
+        margin: 10mm 0 0 auto;
+      }
+
+      .balance-row {
+        margin-top: 16mm;
+        padding-top: 5mm;
+      }
+
+      .invoice-footer {
+        grid-template-columns: 1.1fr .9fr;
+        gap: 22mm;
+        padding-top: 22mm;
+      }
+
+      .footer-title { margin-bottom: 8mm; }
+      .payment-method-title { margin-bottom: 6mm; }
+
+      .invoice-table tr,
+      .invoice-table td {
+        break-inside: avoid;
+      }
+
+      .format-selected {
+        outline: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-lockup">
+      <div class="brand-mark">K2</div>
+      <div class="brand-copy">
+        <strong>Invoice Generator</strong>
+        <span>One-file app · flexible invoice · locked one-page A4</span>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button class="btn btn-secondary" id="newButton" type="button">New invoice</button>
+      <button class="btn btn-secondary" id="exampleButton" type="button">Load example</button>
+      <button class="btn btn-secondary" id="saveButton" type="button">Save draft</button>
+      <button class="btn btn-secondary" id="formatButton" type="button">Format invoice</button>
+      <button class="btn btn-primary" id="printButton" type="button">Print / Save PDF</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="editor" aria-label="Invoice editor">
+      <div class="editor-scroll">
+        <div class="intro">
+          <p class="eyebrow">Live editor</p>
+          <h1>Create your invoice</h1>
+          <p>Change the fields below. The invoice and all payment calculations update immediately.</p>
+          <div class="validation" id="validationMessage" role="alert"></div>
+        </div>
+
+        <form id="invoiceForm">
+          <details class="form-card" open>
+            <summary>Invoice details</summary>
+            <div class="form-grid">
+              <div class="field full">
+                <label for="customerName">Customer / company name</label>
+                <input id="customerName" name="customerName" value="">
+              </div>
+              <div class="field">
+                <label for="invoiceNumber">Invoice number</label>
+                <input id="invoiceNumber" name="invoiceNumber" value="">
+              </div>
+              <div class="field">
+                <label for="issueDate">Issue date</label>
+                <input id="issueDate" name="issueDate" type="date">
+              </div>
+              <div class="field full">
+                <label for="projectNote">Project / invoice note (optional)</label>
+                <input id="projectNote" name="projectNote" placeholder="e.g. Website + POS system development">
+              </div>
+            </div>
+          </details>
+
+          <details class="form-card" open>
+            <summary>Services / line items</summary>
+            <div class="form-grid">
+              <div class="section-tools">
+                <p>Add as many services as needed. Quantity × unit price is calculated automatically.</p>
+                <button class="mini-btn accent" id="addItemButton" type="button">＋ Add service</button>
+              </div>
+
+              <div class="line-items-editor" id="lineItemsEditor"></div>
+
+              <div class="field">
+                <label for="discount">Discount (optional)</label>
+                <div class="money-wrap">
+                  <input id="discount" name="discount" type="number" min="0" step="1000" value="0">
+                  <span>MMK</span>
+                </div>
+              </div>
+              <div class="field">
+                <label for="extraCharge">Additional charge (optional)</label>
+                <div class="money-wrap">
+                  <input id="extraCharge" name="extraCharge" type="number" min="0" step="1000" value="0">
+                  <span>MMK</span>
+                </div>
+              </div>
+
+              <div class="totals-strip">
+                <div class="total-chip">
+                  <span>Services subtotal</span>
+                  <strong id="editorSubtotal">0 MMK</strong>
+                </div>
+                <div class="total-chip">
+                  <span>Adjustments</span>
+                  <strong id="editorAdjustments">0 MMK</strong>
+                </div>
+                <div class="total-chip">
+                  <span>Invoice total</span>
+                  <strong id="editorGrandTotal">0 MMK</strong>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <details class="form-card" open>
+            <summary>Payment request</summary>
+            <div class="form-grid">
+              <div class="field">
+                <label for="paymentStage">Payment type</label>
+                <select id="paymentStage" name="paymentStage">
+                  <option value="upfront">Upfront payment</option>
+                  <option value="progress">Progress / milestone payment</option>
+                  <option value="final">Final payment</option>
+                  <option value="custom">Custom payment</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="customPaymentLabel">Custom payment label (optional)</label>
+                <input id="customPaymentLabel" name="customPaymentLabel" placeholder="e.g. Phase 2 Payment">
+              </div>
+
+              <div class="field">
+                <label for="upfrontPaid">Upfront already paid</label>
+                <div class="money-wrap">
+                  <input id="upfrontPaid" name="upfrontPaid" type="number" min="0" step="1000" value="0">
+                  <span>MMK</span>
+                </div>
+              </div>
+              <div class="field">
+                <label for="alreadyPaid">Other amount already paid</label>
+                <div class="money-wrap">
+                  <input id="alreadyPaid" name="alreadyPaid" type="number" min="0" step="1000" value="0">
+                  <span>MMK</span>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label for="currentPayment">Payment requested now</label>
+                <div class="money-wrap">
+                  <input id="currentPayment" name="currentPayment" type="number" min="0" step="1000" value="0">
+                  <span>MMK</span>
+                </div>
+              </div>
+
+              <div class="quick-percentages" aria-label="Quick payment amounts">
+                <button type="button" data-percent="20">20%</button>
+                <button type="button" data-percent="30">30%</button>
+                <button type="button" data-percent="40">40%</button>
+                <button type="button" data-percent="50">50%</button>
+                <button type="button" id="useRemainingButton">Use remaining</button>
+              </div>
+
+              <div class="quick-action">
+                <span id="outstandingHint">Outstanding before this payment: 0 MMK</span>
+                <span id="requestPercentHint">Request: 0% of total</span>
+              </div>
+
+              <div class="field full">
+                <label for="paymentMessage">Payment message override (optional)</label>
+                <textarea id="paymentMessage" name="paymentMessage" placeholder="Leave empty for an automatic message"></textarea>
+              </div>
+            </div>
+          </details>
+
+          <details class="form-card" id="formatCard">
+            <summary>Format & layout</summary>
+            <div class="format-panel">
+              <section class="format-section">
+                <div class="format-section-title">Page style · A4 locked</div>
+                <p class="format-help" style="margin:0 0 10px">The printed page is permanently fixed at 210 × 297 mm. If your text, spacing, or service rows become too tall, the invoice content automatically scales down to stay on one A4 page.</p>
+                <div class="format-grid">
+                  <div class="field full">
+                    <label for="pageFontFamily">Invoice font family</label>
+                    <select id="pageFontFamily">
+                      <option value="">Default (Segoe UI / Arial)</option>
+                      <option value='Arial, sans-serif'>Arial</option>
+                      <option value='"Trebuchet MS", Arial, sans-serif'>Trebuchet MS</option>
+                      <option value='Georgia, serif'>Georgia</option>
+                      <option value='"Times New Roman", Times, serif'>Times New Roman</option>
+                      <option value='"Courier New", monospace'>Courier New</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="pageAccentColor">Accent color</label>
+                    <div class="format-color-row">
+                      <input id="pageAccentColor" type="color" value="#de7600" aria-label="Accent color">
+                      <button class="mini-btn" id="resetAccentButton" type="button">Default color</button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="pagePaddingTop">Top padding (mm)</label>
+                    <input id="pagePaddingTop" type="number" min="0" max="60" step="1" placeholder="15">
+                  </div>
+                  <div class="field">
+                    <label for="pagePaddingSide">Side padding (mm)</label>
+                    <input id="pagePaddingSide" type="number" min="0" max="50" step="1" placeholder="14">
+                  </div>
+                  <div class="field">
+                    <label for="pagePaddingBottom">Bottom padding (mm)</label>
+                    <input id="pagePaddingBottom" type="number" min="0" max="60" step="1" placeholder="11">
+                  </div>
+                </div>
+                <div class="format-actions">
+                  <button class="mini-btn" id="resetPageFormatButton" type="button">Reset page style</button>
+                </div>
+              </section>
+
+              <section class="format-section">
+                <div class="format-section-title">Text formatting</div>
+                <div class="field full" style="margin-bottom:9px">
+                  <label for="textFormatTarget">Text to edit</label>
+                  <select id="textFormatTarget"></select>
+                </div>
+                <div class="format-grid">
+                  <div class="field">
+                    <label for="textFontFamily">Font family</label>
+                    <select id="textFontFamily">
+                      <option value="">Inherit page font</option>
+                      <option value='Arial, sans-serif'>Arial</option>
+                      <option value='"Trebuchet MS", Arial, sans-serif'>Trebuchet MS</option>
+                      <option value='Georgia, serif'>Georgia</option>
+                      <option value='"Times New Roman", Times, serif'>Times New Roman</option>
+                      <option value='"Courier New", monospace'>Courier New</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="textFontStyle">Style</label>
+                    <select id="textFontStyle">
+                      <option value="normal">Normal</option>
+                      <option value="italic">Italic</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="textFontSize">Font size (px)</label>
+                    <input id="textFontSize" type="number" min="6" max="72" step="1">
+                  </div>
+                  <div class="field">
+                    <label for="textFontWeight">Weight</label>
+                    <select id="textFontWeight">
+                      <option value="300">Light 300</option>
+                      <option value="400">Regular 400</option>
+                      <option value="500">Medium 500</option>
+                      <option value="600">Semi-bold 600</option>
+                      <option value="700">Bold 700</option>
+                      <option value="800">Extra-bold 800</option>
+                      <option value="850">Heavy 850</option>
+                      <option value="900">Black 900</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="textAlign">Alignment</label>
+                    <select id="textAlign">
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="textLineHeight">Line height</label>
+                    <input id="textLineHeight" type="number" min="0.7" max="3" step="0.05">
+                  </div>
+                  <div class="field">
+                    <label for="textLetterSpacing">Letter spacing (px)</label>
+                    <input id="textLetterSpacing" type="number" min="-5" max="20" step="0.1">
+                  </div>
+                  <div class="field">
+                    <label for="textColor">Text color</label>
+                    <input id="textColor" type="color">
+                  </div>
+                </div>
+                <div class="format-actions">
+                  <button class="mini-btn" id="resetTextFormatButton" type="button">Reset selected text</button>
+                </div>
+              </section>
+
+              <section class="format-section">
+                <div class="format-section-title">Component layout</div>
+                <div class="field full" style="margin-bottom:9px">
+                  <label for="componentFormatTarget">Component to edit</label>
+                  <select id="componentFormatTarget"></select>
+                </div>
+                <div class="format-grid">
+                  <div class="field">
+                    <label for="componentWidth">Width (%)</label>
+                    <input id="componentWidth" type="number" min="20" max="100" step="1">
+                  </div>
+                  <div class="field">
+                    <label for="componentAlign">Horizontal position</label>
+                    <select id="componentAlign">
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="componentMarginTop">Top space (px)</label>
+                    <input id="componentMarginTop" type="number" min="0" max="300" step="1">
+                  </div>
+                  <div class="field">
+                    <label for="componentMarginBottom">Bottom space (px)</label>
+                    <input id="componentMarginBottom" type="number" min="0" max="300" step="1">
+                  </div>
+                  <div class="field">
+                    <label for="componentPadding">Inner padding (px)</label>
+                    <input id="componentPadding" type="number" min="0" max="120" step="1">
+                  </div>
+                  <div class="field">
+                    <label for="componentGap">Internal gap (px)</label>
+                    <input id="componentGap" type="number" min="0" max="150" step="1">
+                  </div>
+                  <div class="field">
+                    <label for="componentRadius">Corner radius (px)</label>
+                    <input id="componentRadius" type="number" min="0" max="60" step="1">
+                  </div>
+                </div>
+                <div class="format-actions">
+                  <button class="mini-btn" id="resetComponentFormatButton" type="button">Reset selected component</button>
+                </div>
+              </section>
+
+              <div class="format-actions" style="margin-top:0">
+                <button class="mini-btn accent" id="resetAllFormattingButton" type="button">Reset all formatting</button>
+              </div>
+              <p class="format-help">Tip: click text or a section directly in the invoice preview to select it here. Formatting is saved with your draft and is also used when printing or saving as PDF.</p>
+            </div>
+          </details>
+
+          <details class="form-card">
+            <summary>Your company</summary>
+            <div class="form-grid">
+              <div class="field full">
+                <label for="issuerName">Issuer name</label>
+                <input id="issuerName" name="issuerName" value="K2 Software Studio">
+              </div>
+              <div class="field full">
+                <label for="tagline">Tagline</label>
+                <input id="tagline" name="tagline" value="Building Solutions. Empowering Growth.">
+              </div>
+              <div class="field full">
+                <label for="invoiceSubtitle">Invoice subtitle</label>
+                <input id="invoiceSubtitle" name="invoiceSubtitle" value="ငွေတောင်းခံလွှာ">
+              </div>
+            </div>
+          </details>
+
+          <details class="form-card">
+            <summary>Payment & contact</summary>
+            <div class="form-grid">
+              <div class="field full">
+                <label for="paymentMethod">Payment method</label>
+                <input id="paymentMethod" name="paymentMethod" value="KBZ Pay / Wave Pay">
+              </div>
+              <div class="field full">
+                <label for="paymentAccount">Payment account</label>
+                <input id="paymentAccount" name="paymentAccount" value="09688683805 (Name: Min Htet Kyaw)">
+              </div>
+              <div class="field full">
+                <label for="phone">Phone / Viber</label>
+                <input id="phone" name="phone" value="09792104209">
+              </div>
+              <div class="field full">
+                <label for="telegram">Telegram</label>
+                <input id="telegram" name="telegram" value="@moekaungdev">
+              </div>
+              <div class="field full">
+                <label for="email">Email</label>
+                <input id="email" name="email" value="k2softwarestudio@gmail.com">
+              </div>
+              <div class="field full">
+                <label for="website">Website</label>
+                <input id="website" name="website" value="www.k2softwarestudio.com">
+              </div>
+            </div>
+          </details>
+        </form>
+      </div>
+    </aside>
+
+    <section class="preview-area" aria-label="Invoice preview">
+      <div class="preview-toolbar">
+        <span class="live-indicator">Live A4 preview · 210 × 297 mm</span>
+        <div class="preview-status-group">
+          <span class="a4-fit-status" id="a4FitStatus">A4 locked · 100%</span>
+          <span class="print-note">Print / Save PDF always uses one A4 page.</span>
+        </div>
+      </div>
+      <div class="preview-scroll" id="previewScroll">
+        <div class="invoice-stage" id="invoiceStage">
+          <article class="invoice-sheet" id="invoiceSheet">
+          <div class="invoice-inner">
+            <header class="invoice-head">
+              <div>
+                <h2 class="issuer-name" id="previewIssuer">K2 Software Studio</h2>
+                <p class="issuer-tagline" id="previewTagline">Building Solutions. Empowering Growth.</p>
+              </div>
+              <div>
+                <h2 class="invoice-title">INVOICE</h2>
+                <p class="invoice-subtitle" id="previewSubtitle">ငွေတောင်းခံလွှာ</p>
+              </div>
+            </header>
+
+            <section class="invoice-meta">
+              <div class="meta-block">
+                <p class="meta-label">Billed to</p>
+                <p class="meta-value strong" id="previewCustomer">—</p>
+                <p class="meta-value" id="previewProjectNote"></p>
+              </div>
+              <div class="meta-block right">
+                <p class="meta-label">Invoice no</p>
+                <p class="meta-value strong" id="previewInvoiceNumber">#INV-2026-008</p>
+                <p class="meta-label">Issue date</p>
+                <p class="meta-value strong" id="previewDate">26 Jul 2026</p>
+              </div>
+            </section>
+
+            <section class="payment-callout">
+              <p class="payment-message" id="previewMessage">Pay the remaining balance to complete payment.</p>
+              <p class="amount-due"><span id="previewDueLabel">Final Payment Due Now</span>: <span id="previewCurrentTop">930,000 MMK</span></p>
+            </section>
+
+            <table class="invoice-table" aria-label="Invoice line items">
+              <colgroup><col><col><col><col></colgroup>
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Description</th>
+                  <th>Qty</th>
+                  <th>Amount (MMK)</th>
+                </tr>
+              </thead>
+              <tbody id="previewItemsBody"></tbody>
+            </table>
+
+            <section class="summary-area" aria-label="Payment summary">
+              <div class="summary-row">
+                <span>Services subtotal:</span>
+                <strong id="previewSubtotal">0 MMK</strong>
+              </div>
+              <div class="summary-row hidden" id="previewDiscountRow">
+                <span>Discount:</span>
+                <strong id="previewDiscount">0 MMK</strong>
+              </div>
+              <div class="summary-row hidden" id="previewExtraRow">
+                <span>Additional charge:</span>
+                <strong id="previewExtra">0 MMK</strong>
+              </div>
+              <div class="summary-row">
+                <span>Total invoice:</span>
+                <strong id="previewInvoiceTotal">0 MMK</strong>
+              </div>
+              <div class="summary-row hidden" id="previewUpfrontPaidRow">
+                <span>Upfront already paid:</span>
+                <strong id="previewUpfrontPaid">0 MMK</strong>
+              </div>
+              <div class="summary-row hidden" id="previewAlreadyPaidRow">
+                <span>Other already paid:</span>
+                <strong id="previewAlreadyPaid">0 MMK</strong>
+              </div>
+              <div class="summary-row">
+                <span id="previewCurrentLabel">Payment requested now:</span>
+                <strong id="previewCurrent">0 MMK</strong>
+              </div>
+              <div class="balance-row">
+                <span class="balance-label" id="previewBalanceLabel">Remaining after payment</span>
+                <span class="balance-value" id="previewBalance">0 MMK</span>
+              </div>
+            </section>
+
+            <footer class="invoice-footer">
+              <div>
+                <h3 class="footer-title">PAYMENT METHODS (ငွေပေးချေရန်)</h3>
+                <p class="payment-method-title">(<span id="previewMethod">KBZ Pay / Wave Pay</span>):</p>
+                <p class="footer-text" id="previewAccount">09688683805 (Name: Min Htet Kyaw)</p>
+              </div>
+              <div>
+                <h3 class="footer-title">CONTACT US (ဆက်သွယ်ရန်)</h3>
+                <ul class="contact-list">
+                  <li><span class="contact-icon">●</span><span id="previewPhone">09792104209 (Phone / Viber)</span></li>
+                  <li><span class="contact-icon">●</span><span id="previewTelegram">@moekaungdev</span></li>
+                  <li><span class="contact-icon">●</span><span id="previewEmail">k2softwarestudio@gmail.com</span></li>
+                  <li><span class="contact-icon">●</span><span id="previewWebsite">www.k2softwarestudio.com</span></li>
+                </ul>
+              </div>
+            </footer>
+          </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const form = document.getElementById("invoiceForm");
+      const validation = document.getElementById("validationMessage");
+      const toast = document.getElementById("toast");
+      const itemsEditor = document.getElementById("lineItemsEditor");
+      const previewItemsBody = document.getElementById("previewItemsBody");
+      const invoiceSheet = document.getElementById("invoiceSheet");
+      const invoiceInner = invoiceSheet.querySelector(".invoice-inner");
+      const invoiceStage = document.getElementById("invoiceStage");
+      const previewScroll = document.getElementById("previewScroll");
+      const a4FitStatus = document.getElementById("a4FitStatus");
+      const formatCard = document.getElementById("formatCard");
+      let contentFitScale = 1;
+      let previewDisplayScale = 1;
+      const storageKey = "k2-single-file-invoice-draft-v2";
+      const oldStorageKey = "k2-single-file-invoice-draft-v1";
+
+      const storage = {
+        getItem(key) {
+          try { return window.localStorage.getItem(key); }
+          catch { return null; }
+        },
+        setItem(key, value) {
+          try {
+            window.localStorage.setItem(key, value);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        removeItem(key) {
+          try { window.localStorage.removeItem(key); }
+          catch { /* Storage may be unavailable in restricted browser contexts. */ }
+        }
+      };
+
+      const scalarFields = [
+        "customerName", "invoiceNumber", "issueDate", "projectNote",
+        "discount", "extraCharge", "paymentStage", "customPaymentLabel",
+        "upfrontPaid", "alreadyPaid", "currentPayment", "paymentMessage",
+        "issuerName", "tagline", "invoiceSubtitle", "paymentMethod", "paymentAccount",
+        "phone", "telegram", "email", "website"
+      ];
+
+      const companyDefaults = {
+        issuerName: "K2 Software Studio",
+        tagline: "Building Solutions. Empowering Growth.",
+        invoiceSubtitle: "ငွေတောင်းခံလွှာ",
+        paymentMethod: "KBZ Pay / Wave Pay",
+        paymentAccount: "09688683805 (Name: Min Htet Kyaw)",
+        phone: "09792104209",
+        telegram: "@moekaungdev",
+        email: "k2softwarestudio@gmail.com",
+        website: "www.k2softwarestudio.com"
+      };
+
+      const get = (id) => document.getElementById(id);
+
+      const textTargets = {
+        issuerName: { label: "Company / issuer name", selector: ".issuer-name" },
+        tagline: { label: "Company tagline", selector: ".issuer-tagline" },
+        invoiceTitle: { label: "INVOICE title", selector: ".invoice-title" },
+        invoiceSubtitle: { label: "Invoice subtitle", selector: ".invoice-subtitle" },
+        metaLabels: { label: "Billed to / Invoice no labels", selector: ".meta-label" },
+        customerName: { label: "Customer name", selector: "#previewCustomer" },
+        projectNote: { label: "Project / invoice note", selector: "#previewProjectNote" },
+        invoiceMetaValues: { label: "Invoice number & date", selector: ".meta-block.right .meta-value" },
+        paymentMessage: { label: "Payment message", selector: ".payment-message" },
+        amountDue: { label: "Payment due amount", selector: ".amount-due" },
+        tableHeader: { label: "Services table header", selector: ".invoice-table th" },
+        tableBody: { label: "Services table rows", selector: ".invoice-table td" },
+        summaryRows: { label: "Payment summary rows", selector: ".summary-row" },
+        balanceLabel: { label: "Balance label", selector: ".balance-label" },
+        balanceValue: { label: "Balance amount", selector: ".balance-value" },
+        footerTitles: { label: "Footer section titles", selector: ".footer-title" },
+        paymentMethodTitle: { label: "Payment method label", selector: ".payment-method-title" },
+        footerBody: { label: "Payment/contact details", selector: ".footer-text, .contact-list" }
+      };
+
+      const componentTargets = {
+        header: { label: "Invoice header", selector: ".invoice-head" },
+        meta: { label: "Customer / invoice details", selector: ".invoice-meta" },
+        paymentCallout: { label: "Payment request box", selector: ".payment-callout" },
+        serviceTable: { label: "Services table", selector: ".invoice-table" },
+        summary: { label: "Payment summary", selector: ".summary-area" },
+        balance: { label: "Remaining balance row", selector: ".balance-row" },
+        footer: { label: "Whole footer", selector: ".invoice-footer" },
+        paymentFooter: { label: "Payment methods block", selector: ".invoice-footer > div:first-child" },
+        contactFooter: { label: "Contact block", selector: ".invoice-footer > div:last-child" }
+      };
+
+      const defaultFormatting = () => ({
+        page: { fontFamily: "", accent: "", paddingTop: "", paddingSide: "", paddingBottom: "" },
+        text: {},
+        components: {}
+      });
+
+      let formattingState = defaultFormatting();
+
+      function cloneFormatting(value) {
+        try { return JSON.parse(JSON.stringify(value || defaultFormatting())); }
+        catch { return defaultFormatting(); }
+      }
+
+      function normalizeFormatting(value) {
+        const base = defaultFormatting();
+        if (!value || typeof value !== "object") return base;
+        return {
+          page: { ...base.page, ...(value.page || {}) },
+          text: value.text && typeof value.text === "object" ? cloneFormatting(value.text) : {},
+          components: value.components && typeof value.components === "object" ? cloneFormatting(value.components) : {}
+        };
+      }
+
+      function toNonNegativeNumber(input) {
+        const parsed = Number(input);
+        return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+      }
+
+      function localISODate() {
+        const now = new Date();
+        const tzOffset = now.getTimezoneOffset() * 60000;
+        return new Date(now.getTime() - tzOffset).toISOString().slice(0, 10);
+      }
+
+      function nextInvoiceNumber() {
+        const year = new Date().getFullYear();
+        return `#INV-${year}-001`;
+      }
+
+      const value = (id) => get(id)?.value?.trim?.() ?? "";
+      const numberValue = (id) => toNonNegativeNumber(get(id)?.value);
+
+      function hexToRgb(hex) {
+        const clean = String(hex || "").replace("#", "");
+        if (!/^[0-9a-f]{6}$/i.test(clean)) return null;
+        return [0, 2, 4].map((i) => parseInt(clean.slice(i, i + 2), 16));
+      }
+
+      function rgbToHex(rgb) {
+        return `#${rgb.map((n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0")).join("")}`;
+      }
+
+      function mixHex(hex, target, amount) {
+        const rgb = hexToRgb(hex);
+        if (!rgb) return hex;
+        return rgbToHex(rgb.map((n, i) => n + (target[i] - n) * amount));
+      }
+
+      function allMatches(selector) {
+        return [...invoiceSheet.querySelectorAll(selector)];
+      }
+
+      function applyPageFormatting() {
+        const page = formattingState.page || {};
+        if (page.fontFamily) invoiceSheet.style.setProperty("--invoice-font-family", page.fontFamily);
+        else invoiceSheet.style.removeProperty("--invoice-font-family");
+
+        if (page.accent) {
+          invoiceSheet.style.setProperty("--accent", page.accent);
+          invoiceSheet.style.setProperty("--accent-dark", mixHex(page.accent, [0, 0, 0], .38));
+          invoiceSheet.style.setProperty("--accent-soft", mixHex(page.accent, [255, 255, 255], .82));
+        } else {
+          invoiceSheet.style.removeProperty("--accent");
+          invoiceSheet.style.removeProperty("--accent-dark");
+          invoiceSheet.style.removeProperty("--accent-soft");
+        }
+
+        const hasPadding = page.paddingTop !== "" || page.paddingSide !== "" || page.paddingBottom !== "";
+        if (hasPadding) {
+          const top = page.paddingTop === "" ? 15 : Number(page.paddingTop);
+          const side = page.paddingSide === "" ? 14 : Number(page.paddingSide);
+          const bottom = page.paddingBottom === "" ? 11 : Number(page.paddingBottom);
+          invoiceInner.style.padding = `${top}mm ${side}mm ${bottom}mm`;
+        } else {
+          invoiceInner.style.removeProperty("padding");
+        }
+      }
+
+      function applyTextFormatting() {
+        Object.entries(textTargets).forEach(([key, config]) => {
+          const style = formattingState.text[key] || {};
+          allMatches(config.selector).forEach((node) => {
+            const props = {
+              fontFamily: style.fontFamily ?? "",
+              fontStyle: style.fontStyle ?? "",
+              fontSize: style.fontSize !== undefined ? `${style.fontSize}px` : "",
+              fontWeight: style.fontWeight ?? "",
+              textAlign: style.textAlign ?? "",
+              lineHeight: style.lineHeight !== undefined ? String(style.lineHeight) : "",
+              letterSpacing: style.letterSpacing !== undefined ? `${style.letterSpacing}px` : "",
+              color: style.color ?? ""
+            };
+            Object.entries(props).forEach(([prop, val]) => {
+              if (val === "") node.style.removeProperty(prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`));
+              else node.style[prop] = val;
+            });
+          });
+        });
+      }
+
+      function applyComponentFormatting() {
+        Object.entries(componentTargets).forEach(([key, config]) => {
+          const style = formattingState.components[key] || {};
+          allMatches(config.selector).forEach((node) => {
+            const alignMargins = style.horizontalAlign === "center"
+              ? { marginLeft: "auto", marginRight: "auto" }
+              : style.horizontalAlign === "right"
+                ? { marginLeft: "auto", marginRight: "0px" }
+                : style.horizontalAlign === "left"
+                  ? { marginLeft: "0px", marginRight: "auto" }
+                  : { marginLeft: "", marginRight: "" };
+            const props = {
+              width: style.width !== undefined ? `${style.width}%` : "",
+              ...alignMargins,
+              marginTop: style.marginTop !== undefined ? `${style.marginTop}px` : "",
+              marginBottom: style.marginBottom !== undefined ? `${style.marginBottom}px` : "",
+              padding: style.padding !== undefined ? `${style.padding}px` : "",
+              gap: style.gap !== undefined ? `${style.gap}px` : "",
+              borderRadius: style.borderRadius !== undefined ? `${style.borderRadius}px` : ""
+            };
+            Object.entries(props).forEach(([prop, val]) => {
+              const cssProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
+              if (val === "") node.style.removeProperty(cssProp);
+              else node.style[prop] = val;
+            });
+          });
+
+          if (key === "serviceTable") {
+            invoiceSheet.querySelectorAll(".invoice-table th, .invoice-table td").forEach((cell) => {
+              if (style.padding !== undefined) cell.style.paddingTop = cell.style.paddingBottom = `${style.padding}px`;
+              else {
+                cell.style.removeProperty("padding-top");
+                cell.style.removeProperty("padding-bottom");
+              }
+            });
+          }
+        });
+      }
+
+      function tagFormatTargets() {
+        invoiceSheet.querySelectorAll("[data-format-target]").forEach((node) => node.removeAttribute("data-format-target"));
+        Object.entries(textTargets).forEach(([key, config]) => {
+          allMatches(config.selector).forEach((node) => node.dataset.formatTarget = `text:${key}`);
+        });
+        Object.entries(componentTargets).forEach(([key, config]) => {
+          allMatches(config.selector).forEach((node) => {
+            if (!node.dataset.formatTarget) node.dataset.formatTarget = `component:${key}`;
+          });
+        });
+      }
+
+      function clearFormatHighlight() {
+        invoiceSheet.querySelectorAll(".format-selected").forEach((node) => node.classList.remove("format-selected"));
+      }
+
+      function highlightFormatTarget(kind, key) {
+        clearFormatHighlight();
+        const config = kind === "text" ? textTargets[key] : componentTargets[key];
+        if (!config) return;
+        allMatches(config.selector).forEach((node) => node.classList.add("format-selected"));
+      }
+
+      function updateA4FitStatus() {
+        const percent = Math.max(1, Math.round(contentFitScale * 100));
+        a4FitStatus.textContent = contentFitScale < 0.999
+          ? `A4 locked · Auto-fit ${percent}%`
+          : "A4 locked · 100%";
+        a4FitStatus.classList.toggle("tight", contentFitScale < 0.78);
+        a4FitStatus.title = contentFitScale < 0.78
+          ? "The invoice is heavily scaled to remain on one page. Consider reducing spacing, font sizes, or service rows for better readability."
+          : "The invoice is guaranteed to stay inside one A4 page.";
+      }
+
+      function fitInvoiceToA4() {
+        // First measure the document at its natural A4 size. Formatting remains fully
+        // editable; this scale is only the final safety layer that prevents page 2.
+        invoiceInner.style.removeProperty("transform");
+        invoiceInner.style.width = "100%";
+        invoiceInner.style.minHeight = "297mm";
+
+        const pageWidth = invoiceSheet.clientWidth || 1;
+        const pageHeight = invoiceSheet.clientHeight || 1;
+        let requiredWidth = Math.max(invoiceInner.scrollWidth, pageWidth);
+        let requiredHeight = Math.max(invoiceInner.scrollHeight, pageHeight);
+        let scale = Math.min(1, pageWidth / requiredWidth, pageHeight / requiredHeight);
+
+        // Small safety margin avoids a second page caused by browser rounding.
+        if (scale < 0.999) scale *= 0.995;
+
+        for (let i = 0; i < 3; i += 1) {
+          const safeScale = Math.max(0.05, Math.min(1, scale));
+          invoiceInner.style.width = `${100 / safeScale}%`;
+          invoiceInner.style.minHeight = `${pageHeight / safeScale}px`;
+          invoiceInner.style.transform = safeScale < 0.999 ? `scale(${safeScale})` : "none";
+
+          // Re-check after widening the unscaled layout. This catches long unbroken
+          // text, unusually large fonts, and aggressive custom component spacing.
+          requiredWidth = Math.max(invoiceInner.scrollWidth * safeScale, pageWidth);
+          requiredHeight = Math.max(invoiceInner.scrollHeight * safeScale, pageHeight);
+          const correction = Math.min(1, pageWidth / requiredWidth, pageHeight / requiredHeight);
+          scale = safeScale * correction;
+          if (correction > 0.9995) break;
+        }
+
+        contentFitScale = Math.max(0.05, Math.min(1, scale));
+        invoiceInner.style.width = `${100 / contentFitScale}%`;
+        invoiceInner.style.minHeight = `${pageHeight / contentFitScale}px`;
+        invoiceInner.style.transform = contentFitScale < 0.999 ? `scale(${contentFitScale})` : "none";
+        updateA4FitStatus();
+      }
+
+      function updatePreviewDisplayScale() {
+        // Keep the A4 geometry unchanged. Only shrink its screen representation when
+        // the preview column is narrower than the physical 210 mm page.
+        const previewStyle = getComputedStyle(previewScroll);
+        const horizontalPadding = parseFloat(previewStyle.paddingLeft || 0) + parseFloat(previewStyle.paddingRight || 0);
+        const available = Math.max(160, previewScroll.clientWidth - horizontalPadding - 2);
+        const naturalWidth = invoiceSheet.offsetWidth || 1;
+        const naturalHeight = invoiceSheet.offsetHeight || 1;
+        previewDisplayScale = Math.min(1, available / naturalWidth);
+
+        invoiceStage.style.width = `${naturalWidth * previewDisplayScale}px`;
+        invoiceStage.style.height = `${naturalHeight * previewDisplayScale}px`;
+        invoiceSheet.style.transform = previewDisplayScale < 0.999
+          ? `scale(${previewDisplayScale})`
+          : "none";
+      }
+
+      function enforceSingleA4Page() {
+        fitInvoiceToA4();
+        updatePreviewDisplayScale();
+      }
+
+      function applyAllFormatting() {
+        applyPageFormatting();
+        applyTextFormatting();
+        applyComponentFormatting();
+        tagFormatTargets();
+        enforceSingleA4Page();
+      }
+
+      const blankInvoice = () => ({
+        customerName: "",
+        invoiceNumber: nextInvoiceNumber(),
+        issueDate: localISODate(),
+        projectNote: "",
+        discount: "0",
+        extraCharge: "0",
+        paymentStage: "upfront",
+        customPaymentLabel: "",
+        upfrontPaid: "0",
+        alreadyPaid: "0",
+        currentPayment: "0",
+        paymentMessage: "",
+        ...companyDefaults,
+        items: [{ description: "", quantity: "1", unitPrice: "0" }],
+        formatting: defaultFormatting()
+      });
+
+      const example = {
+        customerName: "Sample Customer",
+        invoiceNumber: "#INV-2026-001",
+        issueDate: localISODate(),
+        projectNote: "Website and POS development package",
+        discount: "0",
+        extraCharge: "0",
+        paymentStage: "upfront",
+        customPaymentLabel: "",
+        upfrontPaid: "0",
+        alreadyPaid: "0",
+        currentPayment: "900000",
+        paymentMessage: "",
+        ...companyDefaults,
+        items: [
+          { description: "Website Development", quantity: "1", unitPrice: "2000000" },
+          { description: "POS Software Setup", quantity: "1", unitPrice: "1000000" }
+        ],
+        formatting: defaultFormatting()
+      };
+
+      const formatNumber = (amount) =>
+        new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(amount));
+
+      const formatMoney = (amount) => `${formatNumber(amount)} MMK`;
+
+      const formatPercent = (amount) => {
+        const rounded = Math.round(amount * 10) / 10;
+        return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+      };
+
+      const formatDate = (dateString) => {
+        if (!dateString) return "—";
+        const date = new Date(`${dateString}T00:00:00`);
+        if (Number.isNaN(date.getTime())) return dateString;
+        return new Intl.DateTimeFormat("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric"
+        }).format(date);
+      };
+
+      const setText = (id, text, emptyFallback = "—") => {
+        const node = get(id);
+        if (node) node.textContent = text || emptyFallback;
+      };
+
+      const styleIssuer = (name) => {
+        const node = get("previewIssuer");
+        node.replaceChildren();
+        const safeName = name.trim() || "K2 Software Studio";
+        const words = safeName.split(/\s+/).filter(Boolean);
+        const accentCount = Math.max(1, Math.ceil(words.length / 2));
+        const normal = words.slice(0, words.length - accentCount).join(" ");
+        const accent = words.slice(words.length - accentCount).join(" ");
+        if (normal) node.append(document.createTextNode(`${normal} `));
+        const span = document.createElement("span");
+        span.className = "accent-word";
+        span.textContent = accent || safeName;
+        node.append(span);
+      };
+
+      function createItemEditor(item = {}) {
+        const row = document.createElement("div");
+        row.className = "line-item-editor";
+        row.innerHTML = `
+          <div class="item-field item-description-field">
+            <label>Service / description</label>
+            <input class="item-description-input" type="text" placeholder="e.g. Website Development">
+          </div>
+          <div class="item-field">
+            <label>Qty</label>
+            <input class="item-quantity-input" type="number" min="0.01" step="0.01" value="1">
+          </div>
+          <div class="item-field item-price-field">
+            <label>Unit price (MMK)</label>
+            <input class="item-price-input" type="number" min="0" step="1000" value="0">
+          </div>
+          <button class="remove-item" type="button" title="Remove service" aria-label="Remove service">×</button>
+        `;
+
+        row.querySelector(".item-description-input").value = item.description ?? "";
+        row.querySelector(".item-quantity-input").value = item.quantity ?? "1";
+        row.querySelector(".item-price-input").value = item.unitPrice ?? "0";
+
+        row.querySelector(".remove-item").addEventListener("click", () => {
+          if (itemsEditor.children.length <= 1) return;
+          row.remove();
+          refreshRemoveButtons();
+          updatePreview();
+        });
+
+        itemsEditor.append(row);
+        refreshRemoveButtons();
+        return row;
+      }
+
+      function refreshRemoveButtons() {
+        const onlyOne = itemsEditor.children.length <= 1;
+        itemsEditor.querySelectorAll(".remove-item").forEach((button) => {
+          button.disabled = onlyOne;
+        });
+      }
+
+      function collectItems() {
+        return [...itemsEditor.querySelectorAll(".line-item-editor")].map((row) => ({
+          description: row.querySelector(".item-description-input").value.trim(),
+          quantity: String(Math.max(0, toNonNegativeNumber(row.querySelector(".item-quantity-input").value))),
+          unitPrice: String(toNonNegativeNumber(row.querySelector(".item-price-input").value))
+        }));
+      }
+
+      function calculate() {
+        const items = collectItems().map((item) => {
+          const quantity = toNonNegativeNumber(item.quantity);
+          const unitPrice = toNonNegativeNumber(item.unitPrice);
+          return { ...item, quantity, unitPrice, amount: quantity * unitPrice };
+        });
+
+        const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
+        const discount = numberValue("discount");
+        const extraCharge = numberValue("extraCharge");
+        const total = Math.max(subtotal - discount + extraCharge, 0);
+        const upfront = numberValue("upfrontPaid");
+        const already = numberValue("alreadyPaid");
+        const current = numberValue("currentPayment");
+        const paidBefore = upfront + already;
+        const outstandingBefore = Math.max(total - paidBefore, 0);
+        const rawRemaining = total - paidBefore - current;
+        const remaining = Math.max(rawRemaining, 0);
+        const overpayment = Math.max(-rawRemaining, 0);
+        const requestPercent = total > 0 ? (current / total) * 100 : 0;
+        const remainingPercent = total > 0 ? (remaining / total) * 100 : 0;
+
+        return {
+          items, subtotal, discount, extraCharge, total, upfront, already,
+          current, paidBefore, outstandingBefore, remaining, overpayment,
+          requestPercent, remainingPercent
+        };
+      }
+
+      function paymentTypeLabel() {
+        const custom = value("customPaymentLabel");
+        if (custom) return custom;
+        switch (value("paymentStage")) {
+          case "upfront": return "Upfront Payment";
+          case "progress": return "Progress Payment";
+          case "final": return "Final Payment";
+          default: return "Payment";
+        }
+      }
+
+      function automaticMessage(calc) {
+        if (calc.total <= 0) return "Add at least one priced service to generate the payment request.";
+        if (calc.current <= 0) return "No payment is currently requested.";
+
+        const percent = formatPercent(calc.requestPercent);
+        const stage = value("paymentStage");
+
+        if (calc.overpayment > 0) {
+          return "The requested payment is greater than the outstanding balance. Please review the amount.";
+        }
+
+        if (stage === "upfront" && calc.paidBefore === 0) {
+          return `An upfront payment of ${formatMoney(calc.current)} (${percent}% of the invoice total) is requested to begin the project.`;
+        }
+
+        if (calc.remaining === 0) {
+          return `Please pay ${formatMoney(calc.current)} to complete payment for this invoice.`;
+        }
+
+        if (stage === "final") {
+          return `Final payment requested: ${formatMoney(calc.current)}. ${formatMoney(calc.remaining)} will remain after this payment.`;
+        }
+
+        return `${paymentTypeLabel()} of ${formatMoney(calc.current)} (${percent}% of total) is due now; ${formatMoney(calc.remaining)} remains after this payment.`;
+      }
+
+      function validate(calc) {
+        const messages = [];
+        if (!value("customerName")) messages.push("Enter the customer or company name.");
+        if (!calc.items.some((item) => item.description && item.amount > 0)) {
+          messages.push("Add at least one service with a description and price.");
+        }
+        if (calc.discount > calc.subtotal + calc.extraCharge) {
+          messages.push("Discount cannot reduce the invoice total below zero.");
+        }
+        if (calc.paidBefore > calc.total) {
+          messages.push("Previously paid amount is greater than the invoice total.");
+        }
+        if (calc.overpayment > 0) {
+          messages.push(`Requested payment is ${formatMoney(calc.overpayment)} more than the outstanding balance.`);
+        }
+
+        validation.textContent = messages.join(" ");
+        validation.classList.toggle("show", messages.length > 0);
+      }
+
+      function renderPreviewItems(calc) {
+        previewItemsBody.replaceChildren();
+
+        calc.items.forEach((item, index) => {
+          if (!item.description && item.amount === 0 && calc.items.length > 1) return;
+
+          const tr = document.createElement("tr");
+          const no = document.createElement("td");
+          no.textContent = String(previewItemsBody.children.length + 1);
+
+          const description = document.createElement("td");
+          description.className = "item-description";
+          description.textContent = item.description || "—";
+
+          const qty = document.createElement("td");
+          qty.textContent = formatQuantity(item.quantity);
+
+          const amount = document.createElement("td");
+          amount.className = "item-amount";
+          amount.textContent = formatNumber(item.amount);
+
+          tr.append(no, description, qty, amount);
+          previewItemsBody.append(tr);
+        });
+
+        if (!previewItemsBody.children.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td>1</td><td class="item-description">—</td><td>1</td><td class="item-amount">0</td>';
+          previewItemsBody.append(tr);
+        }
+      }
+
+      function formatQuantity(quantity) {
+        const rounded = Math.round(quantity * 100) / 100;
+        return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+      }
+
+      function toggleRow(id, show) {
+        get(id).classList.toggle("hidden", !show);
+      }
+
+      function updatePreview() {
+        const calc = calculate();
+        const customMessage = value("paymentMessage");
+        const payLabel = paymentTypeLabel();
+
+        styleIssuer(value("issuerName"));
+        setText("previewTagline", value("tagline"));
+        setText("previewSubtitle", value("invoiceSubtitle"));
+        setText("previewCustomer", value("customerName"));
+        setText("previewProjectNote", value("projectNote"), "");
+        setText("previewInvoiceNumber", value("invoiceNumber"));
+        setText("previewDate", formatDate(value("issueDate")));
+
+        renderPreviewItems(calc);
+
+        setText("previewMessage", customMessage || automaticMessage(calc));
+        setText("previewDueLabel", `${payLabel} Due Now`);
+        setText("previewCurrentTop", formatMoney(calc.current));
+
+        setText("previewSubtotal", formatMoney(calc.subtotal));
+        setText("previewDiscount", `− ${formatMoney(calc.discount)}`);
+        setText("previewExtra", `+ ${formatMoney(calc.extraCharge)}`);
+        setText("previewInvoiceTotal", formatMoney(calc.total));
+        setText("previewUpfrontPaid", formatMoney(calc.upfront));
+        setText("previewAlreadyPaid", formatMoney(calc.already));
+        setText("previewCurrentLabel", `${payLabel}:`);
+        setText("previewCurrent", formatMoney(calc.current));
+
+        toggleRow("previewDiscountRow", calc.discount > 0);
+        toggleRow("previewExtraRow", calc.extraCharge > 0);
+        toggleRow("previewUpfrontPaidRow", calc.upfront > 0);
+        toggleRow("previewAlreadyPaidRow", calc.already > 0);
+
+        if (calc.overpayment > 0) {
+          setText("previewBalanceLabel", "Overpayment");
+          setText("previewBalance", formatMoney(calc.overpayment));
+        } else if (calc.remaining === 0 && calc.total > 0 && calc.current > 0) {
+          setText("previewBalanceLabel", "Remaining after payment");
+          setText("previewBalance", "0 MMK — PAID");
+        } else {
+          setText("previewBalanceLabel", "Remaining after payment");
+          setText("previewBalance", formatMoney(calc.remaining));
+        }
+
+        setText("previewMethod", value("paymentMethod"));
+        setText("previewAccount", value("paymentAccount"));
+        setText("previewPhone", value("phone") ? `${value("phone")} (Phone / Viber)` : "");
+        setText("previewTelegram", value("telegram"));
+        setText("previewEmail", value("email"));
+        setText("previewWebsite", value("website"));
+
+        setText("editorSubtotal", formatMoney(calc.subtotal));
+        const adjustment = calc.extraCharge - calc.discount;
+        setText("editorAdjustments", `${adjustment >= 0 ? "+" : "−"} ${formatMoney(Math.abs(adjustment))}`);
+        setText("editorGrandTotal", formatMoney(calc.total));
+        get("outstandingHint").textContent = `Outstanding before this payment: ${formatMoney(calc.outstandingBefore)}`;
+        get("requestPercentHint").textContent = `Request: ${formatPercent(calc.requestPercent)}% of total`;
+
+        applyAllFormatting();
+        validate(calc);
+      }
+
+      function collectForm() {
+        return {
+          version: 4,
+          ...Object.fromEntries(scalarFields.map((id) => [id, get(id).value])),
+          items: collectItems(),
+          formatting: cloneFormatting(formattingState)
+        };
+      }
+
+      function fillForm(data = {}) {
+        const merged = { ...blankInvoice(), ...data };
+
+        scalarFields.forEach((id) => {
+          if (Object.prototype.hasOwnProperty.call(merged, id) && get(id)) {
+            get(id).value = merged[id] ?? "";
+          }
+        });
+
+        itemsEditor.replaceChildren();
+        const items = Array.isArray(merged.items) && merged.items.length
+          ? merged.items
+          : [{ description: "", quantity: "1", unitPrice: "0" }];
+        items.forEach(createItemEditor);
+        formattingState = normalizeFormatting(merged.formatting);
+        applyAllFormatting();
+        syncPageFormatControls();
+        syncTextFormatControls();
+        syncComponentFormatControls();
+        updatePreview();
+      }
+
+      function migrateOldDraft(old) {
+        if (!old || typeof old !== "object") return null;
+        const quantity = toNonNegativeNumber(old.quantity || 1) || 1;
+        const oldTotal = toNonNegativeNumber(old.totalFee);
+        const unitPrice = quantity > 0 ? oldTotal / quantity : oldTotal;
+        const oldOutstanding = Math.max(
+          oldTotal - toNonNegativeNumber(old.upfrontPaid) - toNonNegativeNumber(old.alreadyPaid),
+          0
+        );
+
+        return {
+          customerName: old.customerName || "",
+          invoiceNumber: old.invoiceNumber || nextInvoiceNumber(),
+          issueDate: old.issueDate || localISODate(),
+          projectNote: "",
+          discount: "0",
+          extraCharge: "0",
+          paymentStage: toNonNegativeNumber(old.currentPayment) >= oldOutstanding ? "final" : "progress",
+          customPaymentLabel: "",
+          upfrontPaid: String(toNonNegativeNumber(old.upfrontPaid)),
+          alreadyPaid: String(toNonNegativeNumber(old.alreadyPaid)),
+          currentPayment: String(toNonNegativeNumber(old.currentPayment)),
+          paymentMessage: old.paymentMessage || "",
+          issuerName: old.issuerName || companyDefaults.issuerName,
+          tagline: old.tagline || companyDefaults.tagline,
+          invoiceSubtitle: old.invoiceSubtitle || companyDefaults.invoiceSubtitle,
+          paymentMethod: old.paymentMethod || companyDefaults.paymentMethod,
+          paymentAccount: old.paymentAccount || companyDefaults.paymentAccount,
+          phone: old.phone || companyDefaults.phone,
+          telegram: old.telegram || companyDefaults.telegram,
+          email: old.email || companyDefaults.email,
+          website: old.website || companyDefaults.website,
+          items: [{
+            description: old.description || "",
+            quantity: String(quantity),
+            unitPrice: String(unitPrice)
+          }]
+        };
+      }
+
+      function firstMatch(selector) {
+        return invoiceSheet.querySelector(selector);
+      }
+
+      function parseComputedNumber(value, fallback = 0) {
+        const n = parseFloat(value);
+        return Number.isFinite(n) ? n : fallback;
+      }
+
+      function computedTextValues(key) {
+        const config = textTargets[key];
+        const node = config ? firstMatch(config.selector) : null;
+        if (!node) return { fontStyle: "normal", fontSize: 12, fontWeight: 400, textAlign: "left", lineHeight: 1.4, letterSpacing: 0, color: "#101827" };
+        const cs = getComputedStyle(node);
+        const fontSize = parseComputedNumber(cs.fontSize, 12);
+        const linePx = parseComputedNumber(cs.lineHeight, fontSize * 1.4);
+        const colorMatch = cs.color.match(/\d+/g);
+        const color = colorMatch && colorMatch.length >= 3 ? rgbToHex(colorMatch.slice(0, 3).map(Number)) : "#101827";
+        return {
+          fontStyle: cs.fontStyle || "normal",
+          fontSize: Math.round(fontSize * 10) / 10,
+          fontWeight: parseInt(cs.fontWeight, 10) || 400,
+          textAlign: ["left", "center", "right"].includes(cs.textAlign) ? cs.textAlign : "left",
+          lineHeight: Math.round((linePx / fontSize) * 100) / 100,
+          letterSpacing: cs.letterSpacing === "normal" ? 0 : Math.round(parseComputedNumber(cs.letterSpacing, 0) * 10) / 10,
+          color
+        };
+      }
+
+      function computedComponentValues(key) {
+        const config = componentTargets[key];
+        const node = config ? firstMatch(config.selector) : null;
+        if (!node) return { width: 100, horizontalAlign: "left", marginTop: 0, marginBottom: 0, padding: 0, gap: 0, borderRadius: 0 };
+        const cs = getComputedStyle(node);
+        const parentWidth = node.parentElement?.getBoundingClientRect().width || node.getBoundingClientRect().width || 1;
+        const nodeWidth = node.getBoundingClientRect().width || parentWidth;
+        const marginLeft = parseComputedNumber(cs.marginLeft, 0);
+        const marginRight = parseComputedNumber(cs.marginRight, 0);
+        const horizontalAlign = marginLeft > 1 && marginRight > 1
+          ? "center"
+          : marginLeft > marginRight + 1
+            ? "right"
+            : "left";
+        return {
+          width: Math.max(20, Math.min(100, Math.round((nodeWidth / parentWidth) * 100))),
+          horizontalAlign,
+          marginTop: Math.round(parseComputedNumber(cs.marginTop, 0)),
+          marginBottom: Math.round(parseComputedNumber(cs.marginBottom, 0)),
+          padding: Math.round(parseComputedNumber(cs.paddingTop, 0)),
+          gap: Math.round(parseComputedNumber(cs.gap, 0)),
+          borderRadius: Math.round(parseComputedNumber(cs.borderRadius, 0))
+        };
+      }
+
+      function populateFormatTargetSelects() {
+        const textSelect = get("textFormatTarget");
+        const componentSelect = get("componentFormatTarget");
+        textSelect.replaceChildren();
+        componentSelect.replaceChildren();
+        Object.entries(textTargets).forEach(([key, config]) => {
+          const option = document.createElement("option");
+          option.value = key;
+          option.textContent = config.label;
+          textSelect.append(option);
+        });
+        Object.entries(componentTargets).forEach(([key, config]) => {
+          const option = document.createElement("option");
+          option.value = key;
+          option.textContent = config.label;
+          componentSelect.append(option);
+        });
+      }
+
+      function syncPageFormatControls() {
+        const page = formattingState.page || {};
+        get("pageFontFamily").value = page.fontFamily || "";
+        get("pageAccentColor").value = page.accent || "#de7600";
+        get("pagePaddingTop").value = page.paddingTop ?? "";
+        get("pagePaddingSide").value = page.paddingSide ?? "";
+        get("pagePaddingBottom").value = page.paddingBottom ?? "";
+      }
+
+      function syncTextFormatControls() {
+        const key = get("textFormatTarget").value || Object.keys(textTargets)[0];
+        if (!get("textFormatTarget").value) get("textFormatTarget").value = key;
+        const custom = formattingState.text[key] || {};
+        const computed = computedTextValues(key);
+        get("textFontFamily").value = custom.fontFamily ?? "";
+        get("textFontStyle").value = custom.fontStyle ?? computed.fontStyle;
+        get("textFontSize").value = custom.fontSize ?? computed.fontSize;
+        get("textFontWeight").value = String(custom.fontWeight ?? computed.fontWeight);
+        if (!get("textFontWeight").value) get("textFontWeight").value = "400";
+        get("textAlign").value = custom.textAlign ?? computed.textAlign;
+        get("textLineHeight").value = custom.lineHeight ?? computed.lineHeight;
+        get("textLetterSpacing").value = custom.letterSpacing ?? computed.letterSpacing;
+        get("textColor").value = custom.color ?? computed.color;
+        highlightFormatTarget("text", key);
+      }
+
+      function syncComponentFormatControls() {
+        const key = get("componentFormatTarget").value || Object.keys(componentTargets)[0];
+        if (!get("componentFormatTarget").value) get("componentFormatTarget").value = key;
+        const custom = formattingState.components[key] || {};
+        const computed = computedComponentValues(key);
+        get("componentWidth").value = custom.width ?? computed.width;
+        get("componentAlign").value = custom.horizontalAlign ?? computed.horizontalAlign;
+        get("componentMarginTop").value = custom.marginTop ?? computed.marginTop;
+        get("componentMarginBottom").value = custom.marginBottom ?? computed.marginBottom;
+        get("componentPadding").value = custom.padding ?? computed.padding;
+        get("componentGap").value = custom.gap ?? computed.gap;
+        get("componentRadius").value = custom.borderRadius ?? computed.borderRadius;
+      }
+
+      function updateTextStyleFromControls() {
+        const key = get("textFormatTarget").value;
+        formattingState.text[key] = {
+          fontFamily: get("textFontFamily").value,
+          fontStyle: get("textFontStyle").value,
+          fontSize: Number(get("textFontSize").value),
+          fontWeight: get("textFontWeight").value,
+          textAlign: get("textAlign").value,
+          lineHeight: Number(get("textLineHeight").value),
+          letterSpacing: Number(get("textLetterSpacing").value),
+          color: get("textColor").value
+        };
+        applyTextFormatting();
+        highlightFormatTarget("text", key);
+        enforceSingleA4Page();
+      }
+
+      function updateComponentStyleFromControls() {
+        const key = get("componentFormatTarget").value;
+        formattingState.components[key] = {
+          width: Number(get("componentWidth").value),
+          horizontalAlign: get("componentAlign").value,
+          marginTop: Number(get("componentMarginTop").value),
+          marginBottom: Number(get("componentMarginBottom").value),
+          padding: Number(get("componentPadding").value),
+          gap: Number(get("componentGap").value),
+          borderRadius: Number(get("componentRadius").value)
+        };
+        applyComponentFormatting();
+        highlightFormatTarget("component", key);
+        enforceSingleA4Page();
+      }
+
+      function openFormatEditor(kind, key) {
+        formatCard.open = true;
+        if (kind === "text" && textTargets[key]) {
+          get("textFormatTarget").value = key;
+          syncTextFormatControls();
+        } else if (kind === "component" && componentTargets[key]) {
+          get("componentFormatTarget").value = key;
+          syncComponentFormatControls();
+          highlightFormatTarget("component", key);
+        }
+      }
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add("show");
+        window.clearTimeout(showToast.timer);
+        showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2200);
+      }
+
+      function setQuickPercent(percent) {
+        const calc = calculate();
+        const requested = Math.min(calc.total * (percent / 100), calc.outstandingBefore);
+        get("currentPayment").value = String(Math.round(requested));
+        updatePreview();
+      }
+
+      form.addEventListener("input", updatePreview);
+      form.addEventListener("change", updatePreview);
+
+      get("addItemButton").addEventListener("click", () => {
+        createItemEditor({ description: "", quantity: "1", unitPrice: "0" });
+        itemsEditor.lastElementChild.querySelector(".item-description-input").focus();
+        updatePreview();
+      });
+
+      document.querySelectorAll("[data-percent]").forEach((button) => {
+        button.addEventListener("click", () => setQuickPercent(Number(button.dataset.percent)));
+      });
+
+      get("useRemainingButton").addEventListener("click", () => {
+        const calc = calculate();
+        get("currentPayment").value = String(Math.round(calc.outstandingBefore));
+        if (calc.outstandingBefore > 0) get("paymentStage").value = "final";
+        updatePreview();
+      });
+
+      get("newButton").addEventListener("click", () => {
+        const currentCompany = Object.fromEntries(
+          Object.keys(companyDefaults).map((id) => [id, get(id).value])
+        );
+        const currentFormatting = cloneFormatting(formattingState);
+        fillForm({ ...blankInvoice(), ...currentCompany, formatting: currentFormatting });
+        showToast("New invoice ready.");
+      });
+
+      get("exampleButton").addEventListener("click", () => {
+        fillForm(example);
+        showToast("Multi-service upfront example loaded.");
+      });
+
+      get("saveButton").addEventListener("click", () => {
+        const savedOkay = storage.setItem(storageKey, JSON.stringify(collectForm()));
+        showToast(savedOkay ? "Draft saved in this browser." : "Browser storage is unavailable; invoice still works normally.");
+      });
+
+      populateFormatTargetSelects();
+
+      get("formatButton").addEventListener("click", () => {
+        formatCard.open = true;
+        formatCard.scrollIntoView({ behavior: "smooth", block: "start" });
+        syncTextFormatControls();
+      });
+
+      get("pageFontFamily").addEventListener("change", () => {
+        formattingState.page.fontFamily = get("pageFontFamily").value;
+        applyAllFormatting();
+      });
+
+      get("pageAccentColor").addEventListener("input", () => {
+        formattingState.page.accent = get("pageAccentColor").value;
+        applyAllFormatting();
+      });
+
+      ["pagePaddingTop", "pagePaddingSide", "pagePaddingBottom"].forEach((id) => {
+        get(id).addEventListener("input", () => {
+          const map = { pagePaddingTop: "paddingTop", pagePaddingSide: "paddingSide", pagePaddingBottom: "paddingBottom" };
+          formattingState.page[map[id]] = get(id).value === "" ? "" : Number(get(id).value);
+          applyAllFormatting();
+        });
+      });
+
+      get("resetAccentButton").addEventListener("click", () => {
+        formattingState.page.accent = "";
+        get("pageAccentColor").value = "#de7600";
+        applyAllFormatting();
+      });
+
+      get("resetPageFormatButton").addEventListener("click", () => {
+        formattingState.page = defaultFormatting().page;
+        syncPageFormatControls();
+        applyAllFormatting();
+        showToast("Page formatting reset.");
+      });
+
+      get("textFormatTarget").addEventListener("change", syncTextFormatControls);
+      ["textFontFamily", "textFontStyle", "textFontSize", "textFontWeight", "textAlign", "textLineHeight", "textLetterSpacing", "textColor"].forEach((id) => {
+        get(id).addEventListener(id === "textColor" ? "input" : "change", updateTextStyleFromControls);
+        if (["textFontSize", "textLineHeight", "textLetterSpacing"].includes(id)) get(id).addEventListener("input", updateTextStyleFromControls);
+      });
+
+      get("resetTextFormatButton").addEventListener("click", () => {
+        const key = get("textFormatTarget").value;
+        delete formattingState.text[key];
+        applyTextFormatting();
+        syncTextFormatControls();
+        enforceSingleA4Page();
+        showToast("Selected text formatting reset.");
+      });
+
+      get("componentFormatTarget").addEventListener("change", () => {
+        syncComponentFormatControls();
+        highlightFormatTarget("component", get("componentFormatTarget").value);
+      });
+      ["componentWidth", "componentAlign", "componentMarginTop", "componentMarginBottom", "componentPadding", "componentGap", "componentRadius"].forEach((id) => {
+        get(id).addEventListener("input", updateComponentStyleFromControls);
+        get(id).addEventListener("change", updateComponentStyleFromControls);
+      });
+
+      get("resetComponentFormatButton").addEventListener("click", () => {
+        const key = get("componentFormatTarget").value;
+        delete formattingState.components[key];
+        applyComponentFormatting();
+        syncComponentFormatControls();
+        highlightFormatTarget("component", key);
+        enforceSingleA4Page();
+        showToast("Selected component layout reset.");
+      });
+
+      get("resetAllFormattingButton").addEventListener("click", () => {
+        formattingState = defaultFormatting();
+        invoiceSheet.querySelectorAll("[style]").forEach((node) => {
+          if (node.closest(".invoice-sheet")) {
+            ["font-family", "font-style", "font-size", "font-weight", "text-align", "line-height", "letter-spacing", "color", "width", "margin-left", "margin-right", "margin-top", "margin-bottom", "padding", "padding-top", "padding-bottom", "gap", "border-radius"].forEach((prop) => node.style.removeProperty(prop));
+          }
+        });
+        invoiceInner.style.removeProperty("padding");
+        applyAllFormatting();
+        syncPageFormatControls();
+        syncTextFormatControls();
+        syncComponentFormatControls();
+        showToast("All custom formatting reset.");
+      });
+
+      invoiceSheet.classList.add("format-pick-mode");
+      invoiceSheet.addEventListener("click", (event) => {
+        const target = event.target.closest("[data-format-target]");
+        if (!target || !invoiceSheet.contains(target)) return;
+        const [kind, key] = String(target.dataset.formatTarget || "").split(":");
+        if (!kind || !key) return;
+        openFormatEditor(kind, key);
+      });
+
+      window.addEventListener("resize", updatePreviewDisplayScale);
+      if (typeof ResizeObserver !== "undefined") {
+        new ResizeObserver(updatePreviewDisplayScale).observe(previewScroll);
+      }
+
+      window.addEventListener("beforeprint", () => {
+        fitInvoiceToA4();
+        invoiceStage.style.width = "210mm";
+        invoiceStage.style.height = "297mm";
+        invoiceSheet.style.transform = "none";
+      });
+
+      window.addEventListener("afterprint", updatePreviewDisplayScale);
+
+      get("printButton").addEventListener("click", () => {
+        updatePreview();
+        fitInvoiceToA4();
+        window.print();
+      });
+
+      let loaded = false;
+      const saved = storage.getItem(storageKey);
+      if (saved) {
+        try {
+          fillForm(JSON.parse(saved));
+          loaded = true;
+        } catch {
+          storage.removeItem(storageKey);
+        }
+      }
+
+      if (!loaded) {
+        const oldSaved = storage.getItem(oldStorageKey);
+        if (oldSaved) {
+          try {
+            const migrated = migrateOldDraft(JSON.parse(oldSaved));
+            if (migrated) {
+              fillForm(migrated);
+              storage.setItem(storageKey, JSON.stringify(collectForm()));
+              loaded = true;
+              showToast("Your older saved invoice was upgraded.");
+            }
+          } catch {
+            // Ignore invalid legacy drafts and start clean.
+          }
+        }
+      }
+
+      if (!loaded) fillForm(example);
+    })();
+  </script>
+</body>
+</html>

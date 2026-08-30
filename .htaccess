@@ -1,0 +1,21 @@
+Options -Indexes
+RewriteEngine On
+
+# Leave API requests to the Apache /backend Alias.
+RewriteRule ^backend(?:/|$) - [L]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "no-referrer"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+    <FilesMatch "\.(js|css|png|jpg|jpeg|gif|webp|svg|woff2?)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>

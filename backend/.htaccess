@@ -1,0 +1,6 @@
+Options -Indexes
+RewriteEngine On
+
+# Only the API front controller is web-accessible from the backend directory.
+RewriteRule ^(?:config|controllers|helpers|middleware|models|routes|public)(?:/|$) - [F,L]
+RewriteRule ^ index.php [QSA,L]

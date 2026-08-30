@@ -1,0 +1,10 @@
+-- Replace both passwords before running this file as a MySQL administrator.
+CREATE USER IF NOT EXISTS 'ksspm_app'@'localhost' IDENTIFIED BY 'REPLACE_APP_PASSWORD';
+ALTER USER 'ksspm_app'@'localhost' IDENTIFIED BY 'REPLACE_APP_PASSWORD';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ksspm.* TO 'ksspm_app'@'localhost';
+
+CREATE USER IF NOT EXISTS 'ksspm_backup'@'localhost' IDENTIFIED BY 'REPLACE_BACKUP_PASSWORD';
+ALTER USER 'ksspm_backup'@'localhost' IDENTIFIED BY 'REPLACE_BACKUP_PASSWORD';
+GRANT SELECT, SHOW VIEW, TRIGGER, EVENT ON ksspm.* TO 'ksspm_backup'@'localhost';
+
+FLUSH PRIVILEGES;

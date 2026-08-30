@@ -1,0 +1,49 @@
+# Replace certificate paths, database password, and JWT secret.
+# Copy the completed VirtualHost blocks into:
+# C:/xampp/apache/conf/extra/httpd-vhosts.conf
+
+<VirtualHost *:80>
+    ServerName office.k2softwarestudio.com
+    Redirect permanent / https://office.k2softwarestudio.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName office.k2softwarestudio.com
+    DocumentRoot "C:/xampp/htdocs/ksspm"
+
+    SSLEngine on
+    SSLCertificateFile "C:/path/to/fullchain.pem"
+    SSLCertificateKeyFile "C:/path/to/privkey.pem"
+
+    <Directory "C:/xampp/htdocs/ksspm">
+        Options -Indexes
+        AllowOverride FileInfo
+        Require all granted
+    </Directory>
+
+    Alias /backend "C:/xampp/htdocs/ksspm/backend/public"
+    <Directory "C:/xampp/htdocs/ksspm/backend/public">
+        Options -Indexes
+        AllowOverride FileInfo Limit
+        Require all granted
+
+        SetEnv APP_ENV production
+        SetEnv APP_DEBUG 0
+        SetEnv APP_TIMEZONE Asia/Yangon
+        SetEnv DB_TIMEZONE +06:30
+        SetEnv DB_HOST 127.0.0.1
+        SetEnv DB_NAME ksspm
+        SetEnv DB_USER ksspm_app
+        SetEnv DB_PASS REPLACE_WITH_DATABASE_PASSWORD
+        SetEnv JWT_SECRET REPLACE_WITH_AT_LEAST_32_RANDOM_CHARACTERS
+        SetEnv JWT_TTL_SECONDS 28800
+        SetEnv CORS_ORIGIN https://office.k2softwarestudio.com
+
+        php_flag display_errors Off
+        php_flag log_errors On
+        php_value error_log "C:/xampp/apache/logs/ksspm-php-error.log"
+    </Directory>
+
+    ErrorLog "logs/ksspm-error.log"
+    CustomLog "logs/ksspm-access.log" combined
+</VirtualHost>

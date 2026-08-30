@@ -1,0 +1,16 @@
+# Local database backups and runtime uploads
+/backups/
+/backend/uploads/*
+!/backend/uploads/.gitkeep
+
+# Local environment and secret files
+.env
+.env.local
+.env.*.local
+
+# Runtime and editor files
+*.log
+/.vscode/
+/.idea/
+Thumbs.db
+.DS_Store
