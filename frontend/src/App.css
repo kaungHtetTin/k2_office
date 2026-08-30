@@ -289,8 +289,7 @@ button:disabled {
   font-size: 13px;
 }
 
-.toolbar,
-.filters {
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -308,8 +307,25 @@ button:disabled {
 }
 
 .filters {
-  justify-content: flex-start;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.filters > input[type='search']:first-child {
+  grid-column: span 2;
+}
+
+.filters > button:last-child {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 input,
@@ -331,7 +347,7 @@ textarea {
 
 .filters input,
 .filters select {
-  max-width: 205px;
+  max-width: none;
 }
 
 .table-wrap {
@@ -848,6 +864,7 @@ label {
 
 .report-filter-scroll {
   min-width: 0;
+  padding-bottom: 2px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -861,10 +878,10 @@ label {
   min-width: 100%;
 }
 
-.report-filter-kind { flex: 0 0 250px; }
-.report-filter-project { flex: 1 0 390px; }
-.report-filter-project .project-picker { grid-template-columns: minmax(200px, 1fr) 170px; }
-.report-filter-select { flex: 0 0 160px; }
+.report-filter-kind { flex: 0 0 220px; }
+.report-filter-project { flex: 1 0 350px; }
+.report-filter-project .project-picker { grid-template-columns: minmax(180px, 1fr) 155px; }
+.report-filter-select { flex: 0 0 145px; }
 .report-filter-date { flex: 0 0 142px; }
 .report-filter-period { flex: 0 0 auto; }
 
@@ -883,6 +900,12 @@ label {
 
 .report-filter-period .period-control {
   margin: 0;
+}
+
+.report-filter-period .period-control button {
+  min-height: 34px;
+  padding-inline: 8px;
+  font-size: 13px;
 }
 
 .report-filter-actions {
