@@ -34,7 +34,7 @@ Default login:
 
 ### Upgrade an Existing Version 1 Database
 
-Back up important data, then import migrations from `database/migrate_v1_1.sql` through `database/migrate_v1_9_server_fee_cleanup.sql` in filename order. These idempotent migrations keep existing financial history, add the Version 1 features and performance indexes, and remove obsolete Project Generated recurring rows. Do not re-import `schema.sql` over a database containing real data because the fresh-install script recreates all tables.
+Back up important data, then import migrations from `database/migrate_v1_1.sql` through `database/migrate_v1_11_manual_invoice_amounts.sql` in filename order. These idempotent migrations keep existing financial history, add the Version 1 features and performance indexes, remove obsolete Project Generated recurring rows, and add customizable installment invoices. Do not re-import `schema.sql` over a database containing real data because the fresh-install script recreates all tables.
 
 In phpMyAdmin, select the existing `ksspm` database before importing each migration in filename order.
 
@@ -163,5 +163,5 @@ Get-Content -Raw ksspm-backup.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
 - If phpMyAdmin does not show `ksspm`, confirm MySQL is running and import `database/schema.sql` from phpMyAdmin's top-level Import screen.
 - If the frontend reports a network error, open `http://localhost/ksspm/backend/public/auth/login`; a GET response such as an authentication or route error confirms Apache can reach PHP.
 - If API requests return `Database connection failed`, verify the database name and credentials in `backend/config/database.php` or the `DB_*` environment variables.
-- If a migrated database reports a missing column, table, or performance index, select `ksspm` and re-run all idempotent migrations through `database/migrate_v1_9_server_fee_cleanup.sql` in filename order.
+- If a migrated database reports a missing column, table, or performance index, select `ksspm` and re-run all idempotent migrations through `database/migrate_v1_11_manual_invoice_amounts.sql` in filename order.
 - If port 5173 is occupied, Vite chooses another port; use the URL printed by `npm run dev`.

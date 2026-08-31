@@ -1319,6 +1319,27 @@ label {
   font-size: 10px;
 }
 
+.invoice-installment-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.invoice-installment-summary span {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.invoice-installment-summary strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
 .invoice-footer {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;

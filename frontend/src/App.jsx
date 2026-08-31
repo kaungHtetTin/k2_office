@@ -679,7 +679,7 @@ function Invoices({ api, canWrite }) {
     try {
       setError('')
       const next = await api.request('/invoices/next-number')
-      setEditing({ invoice_number: next.invoice_number, project_id: '', invoice_date: today(), due_date: '', invoice_type: 'Project Invoice', discount_amount: 0, tax_amount: 0, paid_amount: 0, status: 'Draft', notes: '', items: [{ description: 'Project service', quantity: 1, unit_price: 0 }] })
+      setEditing({ invoice_number: next.invoice_number, project_id: '', invoice_date: today(), due_date: '', invoice_type: 'Project Invoice', discount_amount: 0, tax_amount: 0, paid_amount: 0, project_total_amount: 0, previously_paid_amount: 0, total_amount: 0, remaining_project_amount: 0, status: 'Draft', header_note: 'Please pay the current requested amount by the due date.', notes: '', items: [{ description: 'Project service', quantity: 1, unit_price: 0 }] })
     } catch (err) { setError(err.message) }
   }
   async function save(data) {
@@ -714,8 +714,11 @@ function InvoiceEditor({ api, initial, projects, settings, onSubmit, submitting 
   const [selectedProject, setSelectedProject] = useState(projects.find((row) => String(row.id) === String(initial.project_id)) || initial)
   const project = selectedProject || initial
   const subtotal = items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0)
-  const total = subtotal - Number(form.discount_amount || 0) + Number(form.tax_amount || 0)
-  const previewInvoice = { ...form, subtotal, total_amount: total, balance_amount: total - Number(form.paid_amount || 0), items }
+  const projectTotal = Number(form.project_total_amount || 0)
+  const previouslyPaid = Number(form.previously_paid_amount || 0)
+  const currentAsked = Number(form.total_amount || 0)
+  const remainingProject = Number(form.remaining_project_amount || 0)
+  const previewInvoice = { ...form, subtotal, balance_amount: currentAsked - Number(form.paid_amount || 0), items }
 
   useEffect(() => {
     if (initial.id || !form.invoice_date) return undefined
@@ -731,8 +734,7 @@ function InvoiceEditor({ api, initial, projects, settings, onSubmit, submitting 
     setSelectedProject(selected || null)
     setForm({ ...form, project_id: projectId, ...(!initial.id && selected ? { notes: selected.notes || form.notes || '' } : {}) })
     if (selected && !initial.id) {
-      const amount = Math.max(Number(selected.remaining_balance || selected.total_payable || 0), 0)
-      setItems([{ description: `${selected.project_name} - ${selected.project_type || 'Project service'}`, quantity: 1, unit_price: amount }])
+      setItems([{ description: `${selected.project_name} - ${selected.project_type || 'Project service'}`, quantity: 1, unit_price: 0 }])
     }
   }
   function updateItem(index, key, value) { setItems(items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item)) }
@@ -745,9 +747,12 @@ function InvoiceEditor({ api, initial, projects, settings, onSubmit, submitting 
         <label>Invoice Type<select value={form.invoice_type} onChange={(event) => setForm({ ...form, invoice_type: event.target.value })}>{invoiceTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
         <label>Issue Date<input type="date" value={form.invoice_date || ''} onChange={(event) => setForm({ ...form, invoice_date: event.target.value })} required /></label>
         <label>Due Date<input type="date" value={form.due_date || ''} onChange={(event) => setForm({ ...form, due_date: event.target.value })} /></label>
+        <label className="full">Header Note<textarea maxLength="500" value={form.header_note || ''} onChange={(event) => setForm({ ...form, header_note: event.target.value })} placeholder="Message shown above the requested amount" /></label>
       </div>
+      <fieldset><legend>Invoice Amounts (Manual)</legend><div className="invoice-editor-grid"><label>Project / Contract Total<input type="number" min="0" step="0.01" value={form.project_total_amount ?? 0} onChange={(event) => setForm({ ...form, project_total_amount: event.target.value })} required /></label><label>Already Paid<input type="number" min="0" step="0.01" value={form.previously_paid_amount ?? 0} onChange={(event) => setForm({ ...form, previously_paid_amount: event.target.value })} required /></label><label>Current Asked Amount<input type="number" min="0" step="0.01" value={form.total_amount ?? 0} onChange={(event) => setForm({ ...form, total_amount: event.target.value })} required /></label><label>Remaining Amount<input type="number" min="0" step="0.01" value={form.remaining_project_amount ?? 0} onChange={(event) => setForm({ ...form, remaining_project_amount: event.target.value })} required /></label></div><p className="muted">These values are saved exactly as entered and are not changed by project contracts or payment history.</p></fieldset>
       <fieldset><legend>Invoice Items</legend>{items.map((item, index) => <div className="item-row" key={index}><input aria-label="Description" placeholder="Description" value={item.description} onChange={(event) => updateItem(index, 'description', event.target.value)} required /><input aria-label="Quantity" type="number" min="0.01" step="0.01" value={item.quantity} onChange={(event) => updateItem(index, 'quantity', event.target.value)} /><input aria-label="Unit price" type="number" min="0" step="0.01" value={item.unit_price} onChange={(event) => updateItem(index, 'unit_price', event.target.value)} /><button type="button" aria-label="Remove item" onClick={() => setItems(items.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}<button type="button" onClick={() => setItems([...items, { description: '', quantity: 1, unit_price: 0 }])}>Add Item</button></fieldset>
-      <details className="optional-fields"><summary>Adjustments and notes</summary><div className="invoice-editor-grid"><label>Discount<input type="number" min="0" value={form.discount_amount || 0} onChange={(event) => setForm({ ...form, discount_amount: event.target.value })} /></label><label>Tax / Additional Charge<input type="number" min="0" value={form.tax_amount || 0} onChange={(event) => setForm({ ...form, tax_amount: event.target.value })} /></label><label>Already Paid<input type="number" min="0" value={form.paid_amount || 0} onChange={(event) => setForm({ ...form, paid_amount: event.target.value })} /></label><label className="full">Notes<textarea value={form.notes || ''} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label></div></details>
+      <div className="invoice-installment-summary"><span>Project Total<strong>{currency(projectTotal)}</strong></span><span>Already Paid<strong>{currency(previouslyPaid)}</strong></span><span>Current Asked Amount<strong>{currency(currentAsked)}</strong></span><span>Remaining Amount<strong>{currency(remainingProject)}</strong></span></div>
+      <details className="optional-fields"><summary>Adjustments and notes</summary><div className="invoice-editor-grid"><label>Discount<input type="number" min="0" value={form.discount_amount || 0} onChange={(event) => setForm({ ...form, discount_amount: event.target.value })} /></label><label>Tax / Additional Charge<input type="number" min="0" value={form.tax_amount || 0} onChange={(event) => setForm({ ...form, tax_amount: event.target.value })} /></label><label className="full">Notes<textarea value={form.notes || ''} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label></div></details>
       <div className="form-actions"><button className="primary" disabled={submitting}>{submitting ? 'Saving…' : 'Save Invoice'}</button></div>
     </form>
     <div className="invoice-preview-pane"><span className="a4-label">Live A4 preview · 210 × 297 mm</span><div className="a4-scroll"><InvoiceA4 invoice={previewInvoice} project={project} settings={settings} /></div></div>
@@ -758,8 +763,9 @@ function InvoiceA4({ invoice, project = {}, settings = {}, design: suppliedDesig
   const items = invoice.items || []
   const subtotal = Number(invoice.subtotal ?? items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0))
   const total = Number(invoice.total_amount ?? subtotal - Number(invoice.discount_amount || 0) + Number(invoice.tax_amount || 0))
-  const paid = Number(invoice.paid_amount || 0)
-  const balance = Number(invoice.balance_amount ?? total - paid)
+  const projectTotal = Number(invoice.project_total_amount || 0)
+  const previouslyPaid = Number(invoice.previously_paid_amount || 0)
+  const remainingProject = Number(invoice.remaining_project_amount || 0)
   const money = (value) => `${Number(value || 0).toLocaleString()} ${project.currency || settings.currency || 'MMK'}`
   const design = suppliedDesign || invoiceDesignFrom(settings.invoice_design)
   const columnWidths = String(design.table.columnWidths || '10,61,9,20').split(',').map((value) => Math.max(1, Number(value) || 1))
@@ -769,9 +775,9 @@ function InvoiceA4({ invoice, project = {}, settings = {}, design: suppliedDesig
     <div className="invoice-a4-inner designed">
       {block('header', <header className="invoice-head"><div><h2>{settings.company_name || 'Your Company Name'}</h2><p>{settings.company_tagline || 'Building Solutions. Empowering Growth.'}</p></div><div className="invoice-title"><h2>INVOICE</h2><p>Payment request</p></div></header>)}
       {block('meta', <section className="invoice-meta"><div><small>Billed to</small><strong>{project.customer_company_name || project.contact_person || 'Choose a project'}</strong></div><div><small>Invoice no</small><strong>#{invoice.invoice_number || 'Pending'}</strong><small>Issue date</small><strong>{invoice.invoice_date || today()}</strong>{invoice.due_date && <p>Due {invoice.due_date}</p>}</div></section>)}
-      {block('callout', <section className="invoice-callout"><p>{balance > 0 ? 'Please pay the amount below to complete this payment stage.' : 'This invoice has been fully paid.'}</p><strong>Payment Due Now: {money(Math.max(balance, 0))}</strong></section>)}
+      {block('callout', <section className="invoice-callout"><p>{invoice.header_note || 'Please pay the current requested amount by the due date.'}</p><strong>Current Asked Amount: {money(total)}</strong></section>)}
       {block('table', <table className={`invoice-line-table${design.table.striped ? ' striped' : ''}`}><colgroup>{columnWidths.map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup><thead><tr><th>No.</th><th>Description</th><th>Qty</th><th>Amount</th></tr></thead><tbody>{items.map((item, index) => <tr key={index}><td>{index + 1}</td><td>{item.description}</td><td>{Number(item.quantity || 0)}</td><td>{money(Number(item.quantity || 0) * Number(item.unit_price || 0))}</td></tr>)}</tbody></table>)}
-      {block('summary', <section className="invoice-summary"><p><span>Services subtotal:</span><strong>{money(subtotal)}</strong></p>{Number(invoice.discount_amount || 0) > 0 && <p><span>Discount:</span><strong>- {money(invoice.discount_amount)}</strong></p>}{Number(invoice.tax_amount || 0) > 0 && <p><span>Additional charge:</span><strong>+ {money(invoice.tax_amount)}</strong></p>}<p><span>Total invoice:</span><strong>{money(total)}</strong></p>{paid > 0 && <p><span>Already paid:</span><strong>{money(paid)}</strong></p>}<div><span>Remaining balance</span><strong>{money(Math.max(balance, 0))}</strong></div></section>)}
+      {block('summary', <section className="invoice-summary"><p><span>Project / contract total:</span><strong>{money(projectTotal)}</strong></p><p><span>Already paid:</span><strong>{money(previouslyPaid)}</strong></p><p><span>Current asked amount:</span><strong>{money(total)}</strong></p><div><span>Remaining amount</span><strong>{money(remainingProject)}</strong></div></section>)}
       {block('notes', <p className="invoice-note">{invoice.notes || 'Thank you for your business.'}</p>)}
       {block('footer', <footer className="invoice-footer"><div><h3>PAYMENT METHODS</h3><strong>{settings.payment_method || 'Update payment method'}</strong><p>{settings.payment_account || ''}</p></div><div><h3>CONTACT US</h3><p>{[settings.company_phone, settings.company_telegram, settings.company_email, settings.company_website].filter(Boolean).join(' · ') || 'Update company contact details in Settings'}</p></div></footer>)}
     </div>
@@ -1096,7 +1102,7 @@ function InvoiceDesigner({ initial, settings, onSave, onClose }) {
   const [design, setDesign] = useState(() => structuredClone(initial))
   const [selected, setSelected] = useState('header')
   const [saving, setSaving] = useState(false)
-  const sampleInvoice = { invoice_number: 'INV-2026-0001', invoice_date: today(), due_date: today(), subtotal: 1500000, discount_amount: 50000, tax_amount: 0, total_amount: 1450000, paid_amount: 400000, balance_amount: 1050000, notes: 'Payment is due by the date shown above.', items: [{ description: 'Website design and development', quantity: 1, unit_price: 1200000 }, { description: 'Domain and server setup', quantity: 1, unit_price: 300000 }] }
+  const sampleInvoice = { invoice_number: 'INV-2026-0001', invoice_date: today(), due_date: today(), subtotal: 800000, discount_amount: 0, tax_amount: 0, total_amount: 800000, paid_amount: 0, balance_amount: 800000, project_total_amount: 3000000, previously_paid_amount: 1000000, remaining_project_amount: 1200000, header_note: 'Please pay this second project installment by the due date.', notes: 'Thank you for your business.', items: [{ description: 'Second project installment', quantity: 1, unit_price: 800000 }] }
   const sampleProject = { customer_company_name: 'Sample Customer', contact_person: 'Project Owner', contact_phone: '09 000 000 000', project_name: 'Sample Project', currency: settings.currency || 'MMK' }
   const updatePage = (key, value) => setDesign({ ...design, page: { ...design.page, [key]: value } })
   const updateTable = (key, value) => setDesign({ ...design, table: { ...design.table, [key]: value } })
@@ -1300,7 +1306,7 @@ const projectColumns = [{ key: 'project_code' }, { key: 'project_name' }, { key:
 const paymentColumns = [{ key: 'payment_date' }, { key: 'project_code' }, { key: 'project_name' }, { key: 'customer_company_name', label: 'Customer' }, { key: 'payment_type', label: 'Stage' }, { key: 'payment_scope', label: 'For' }, { key: 'is_historical', label: 'Source' }, { key: 'domain_name', label: 'Domain' }, { key: 'amount' }, { key: 'financial_account_name', label: 'Received By' }, { key: 'recorded_by_name', label: 'Recorded By' }]
 const feeColumns = [{ key: 'project_name' }, { key: 'fee_name' }, { key: 'fee_type' }, { key: 'source_type', label: 'Source' }, { key: 'amount' }, { key: 'billing_cycle' }, { key: 'next_due_date' }, { key: 'status' }]
 const expenseColumns = [{ key: 'expense_date' }, { key: 'project_name' }, { key: 'expense_category' }, { key: 'domain_name', label: 'Domain' }, { key: 'amount' }, { key: 'paid_to' }, { key: 'payment_method' }, { key: 'created_by_name', label: 'Created By' }]
-const invoiceColumns = [{ key: 'invoice_number' }, { key: 'invoice_date' }, { key: 'project_name' }, { key: 'customer_company_name' }, { key: 'total_amount' }, { key: 'paid_amount' }, { key: 'balance_amount' }, { key: 'status' }]
+const invoiceColumns = [{ key: 'invoice_number' }, { key: 'invoice_date' }, { key: 'project_name' }, { key: 'customer_company_name' }, { key: 'project_total_amount', label: 'Project Total' }, { key: 'previously_paid_amount', label: 'Already Paid' }, { key: 'total_amount', label: 'Current Asked' }, { key: 'remaining_project_amount', label: 'Remaining' }, { key: 'status' }]
 const receiptColumns = [{ key: 'receipt_number' }, { key: 'receipt_date' }, { key: 'project_name' }, { key: 'amount' }, { key: 'payment_method' }, { key: 'received_from' }, { key: 'received_by_name', label: 'Recorded By' }]
 
 const paymentFields = [{ name: 'project_id' }, { name: 'payment_date', default: today() }, { name: 'amount' }, { name: 'payment_type', label: 'Payment Stage', default: 'Upfront' }, { name: 'is_historical', label: 'Historical Payment', default: 0, type: 'checkbox' }, { name: 'financial_account_id' }, { name: 'reference_number' }, { name: 'notes' }, { name: 'payment_method', default: 'Cash', hidden: true }]

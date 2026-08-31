@@ -1,5 +1,7 @@
 # Local database backups and runtime uploads
 /backups/
+/database/backups/
+/ksspm-production-data.sql
 /backend/uploads/*
 !/backend/uploads/.gitkeep
 

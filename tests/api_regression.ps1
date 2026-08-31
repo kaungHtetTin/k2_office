@@ -168,7 +168,8 @@ try {
     Expect-Status 422 'POST' '/invoices' @{ project_id = $projectAId; invoice_date = $today; invoice_type = 'Project Invoice'; items = @(@{ description = ('x' * 256); quantity = 1; unit_price = 1 }) }
     $invoiceId = [int](Invoke-Api 'POST' '/invoices' @{
         project_id = $projectAId; invoice_date = $today; due_date = $yesterday; invoice_type = 'Project Invoice'; status = 'Sent'
-        discount_amount = 1.25; tax_amount = 5; paid_amount = 50; notes = 'Regression invoice note'
+        discount_amount = 1.25; tax_amount = 5; paid_amount = 50; project_total_amount = 5000; previously_paid_amount = 123; total_amount = 777; remaining_project_amount = 4000
+        header_note = 'Regression payment request'; notes = 'Regression invoice note'
         items = @(@{ description = 'Development'; quantity = 2; unit_price = 100.125 }, @{ description = 'Setup'; quantity = 0.333; unit_price = 3 })
     }).id
     $invoice = Invoke-Api 'GET' "/invoices/$invoiceId"
@@ -178,14 +179,24 @@ try {
     $nextYearInvoicePreview = Invoke-Api 'GET' "/invoices/next-number?invoice_date=$nextInvoiceYear-01-01"
     Assert-True ($nextYearInvoicePreview.invoice_number -eq "INV-$nextInvoiceYear-0001") 'A new invoice year starts from 0001 independently'
     Assert-Money $invoice.subtotal 201.25 'Invoice subtotal uses rounded line totals'
-    Assert-Money $invoice.total_amount 205 'Invoice total'
-    Assert-Money $invoice.balance_amount 155 'Invoice balance'
+    Assert-Money $invoice.project_total_amount 5000 'Invoice preserves the manually entered project total'
+    Assert-Money $invoice.total_amount 777 'Invoice preserves the manually entered current asked amount'
+    Assert-Money $invoice.balance_amount 727 'Invoice current request balance'
+    Assert-Money $invoice.previously_paid_amount 123 'Invoice preserves the manually entered already-paid amount'
+    Assert-Money $invoice.remaining_project_amount 4000 'Invoice preserves the manually entered remaining amount'
+    Assert-True ($invoice.header_note -eq 'Regression payment request') 'Invoice header note persists'
     Assert-True ($invoice.status -eq 'Partially Paid') 'Paid amount must derive Partially Paid status'
     Assert-True ($invoice.notes -eq 'Regression invoice note') 'Invoice notes persist for softcopy output'
     Assert-Money (($invoice.items | Measure-Object total_price -Sum).Sum) $invoice.subtotal 'Stored line totals must equal subtotal'
-    Invoke-Api 'PUT' "/invoices/$invoiceId" @{ project_id = $projectAId; invoice_date = $today; due_date = $yesterday; invoice_type = 'Project Invoice'; discount_amount = 1.25; tax_amount = 5; paid_amount = 50; notes = 'Updated invoice note'; items = @(@{ description = 'Development'; quantity = 2; unit_price = 100.125 }, @{ description = 'Setup'; quantity = 0.333; unit_price = 3 }) } | Out-Null
-    Assert-True ((Invoke-Api 'GET' "/invoices/$invoiceId").notes -eq 'Updated invoice note') 'Invoice update persists'
-    $temporaryInvoiceId = [int](Invoke-Api 'POST' '/invoices' @{ project_id = $projectAId; invoice_date = $today; invoice_type = 'Other'; items = @(@{ description = 'Delete invoice'; quantity = 1; unit_price = 1 }) }).id
+    Invoke-Api 'PUT' "/invoices/$invoiceId" @{ project_id = $projectAId; invoice_date = $today; due_date = $yesterday; invoice_type = 'Project Invoice'; discount_amount = 1.25; tax_amount = 5; paid_amount = 50; project_total_amount = 6000; previously_paid_amount = 222; total_amount = 888; remaining_project_amount = 4444; header_note = 'Updated payment request'; notes = 'Updated invoice note'; items = @(@{ description = 'Development'; quantity = 2; unit_price = 100.125 }, @{ description = 'Setup'; quantity = 0.333; unit_price = 3 }) } | Out-Null
+    $updatedInvoice = Invoke-Api 'GET' "/invoices/$invoiceId"
+    Assert-True ($updatedInvoice.notes -eq 'Updated invoice note') 'Invoice update persists'
+    Assert-True ($updatedInvoice.header_note -eq 'Updated payment request') 'Invoice header note update persists'
+    Assert-Money $updatedInvoice.project_total_amount 6000 'Invoice manual project total update persists'
+    Assert-Money $updatedInvoice.previously_paid_amount 222 'Invoice manual already-paid update persists'
+    Assert-Money $updatedInvoice.total_amount 888 'Invoice manual current asked update persists'
+    Assert-Money $updatedInvoice.remaining_project_amount 4444 'Invoice manual remaining update persists'
+    $temporaryInvoiceId = [int](Invoke-Api 'POST' '/invoices' @{ project_id = $projectAId; invoice_date = $today; invoice_type = 'Other'; project_total_amount = 1; previously_paid_amount = 0; total_amount = 1; remaining_project_amount = 0; items = @(@{ description = 'Delete invoice'; quantity = 1; unit_price = 1 }) }).id
     Invoke-Api 'DELETE' "/invoices/$temporaryInvoiceId" | Out-Null
     Expect-Status 404 'GET' "/invoices/$temporaryInvoiceId"
 
