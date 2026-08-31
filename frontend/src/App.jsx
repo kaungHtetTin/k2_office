@@ -84,9 +84,32 @@ function makeProjectCode() {
   return `PRJ-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 4).toUpperCase()}`
 }
 
+const authStorageKeys = ['token', 'user', 'remember_me']
+
+function clearStoredAuth() {
+  for (const storage of [localStorage, sessionStorage]) {
+    for (const key of authStorageKeys) storage.removeItem(key)
+  }
+}
+
+function loadStoredAuth() {
+  for (const storage of [sessionStorage, localStorage]) {
+    const token = storage.getItem('token') || ''
+    const savedUser = storage.getItem('user')
+    if (storage === localStorage && storage.getItem('remember_me') !== '1') {
+      for (const key of authStorageKeys) storage.removeItem(key)
+      continue
+    }
+    if (!token || !savedUser) continue
+    try { return { token, user: JSON.parse(savedUser) } } catch { clearStoredAuth(); return { token: '', user: null } }
+  }
+  return { token: '', user: null }
+}
+
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('token') || '')
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user') || 'null'))
+  const [initialAuth] = useState(loadStoredAuth)
+  const [token, setToken] = useState(initialAuth.token)
+  const [user, setUser] = useState(initialAuth.user)
   const [active, setActive] = useState('Dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -105,8 +128,7 @@ function App() {
         if (response.status === 401) {
           setToken('')
           setUser(null)
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
+          clearStoredAuth()
         }
         const detail = payload.errors ? Object.values(payload.errors).join(' ') : ''
         throw new Error(`${payload.message || 'Request failed'} ${detail}`.trim())
@@ -115,18 +137,21 @@ function App() {
     },
   }), [token])
 
-  function handleLogin(auth) {
+  function handleLogin(auth, rememberMe) {
     setToken(auth.token)
     setUser(auth.user)
-    localStorage.setItem('token', auth.token)
-    localStorage.setItem('user', JSON.stringify(auth.user))
+    clearStoredAuth()
+    const storage = rememberMe ? localStorage : sessionStorage
+    storage.setItem('token', auth.token)
+    storage.setItem('user', JSON.stringify(auth.user))
+    if (rememberMe) storage.setItem('remember_me', '1')
   }
 
   async function logout() {
     try { await api.request('/auth/logout', { method: 'POST' }) } catch { /* Clear local session even if the API is unavailable. */ }
     setToken('')
     setUser(null)
-    localStorage.clear()
+    clearStoredAuth()
   }
 
   if (!token) {
@@ -183,7 +208,7 @@ function iconFor(item) {
 }
 
 function LoginPage({ onLogin }) {
-  const [form, setForm] = useState({ email: '', password: '' })
+  const [form, setForm] = useState({ email: '', password: '', remember_me: false })
   const [error, setError] = useState('')
 
   async function submit(e) {
@@ -197,7 +222,7 @@ function LoginPage({ onLogin }) {
       })
       const payload = await response.json()
       if (!payload.success) throw new Error(payload.message)
-      onLogin(payload.data)
+      onLogin(payload.data, form.remember_me)
     } catch (err) {
       setError(err.message)
     }
@@ -211,6 +236,7 @@ function LoginPage({ onLogin }) {
         {error && <div className="alert">{error}</div>}
         <label>Email<input required type="email" autoComplete="username" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
         <label>Password<input required type="password" autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
+        <label className="check-row"><input type="checkbox" checked={form.remember_me} onChange={(e) => setForm({ ...form, remember_me: e.target.checked })} />Remember me on this device</label>
         <button className="primary">Login</button>
       </form>
     </div>

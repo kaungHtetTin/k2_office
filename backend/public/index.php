@@ -856,6 +856,11 @@ try {
     if ($parts === ['auth', 'login'] && $method === 'POST') {
         $data = input();
         $email = strtolower(trim((string)($data['email'] ?? '')));
+        $rememberValue = $data['remember_me'] ?? false;
+        if (!in_array($rememberValue, [true, false, 0, 1, '0', '1'], true)) {
+            json_response(false, 'Validation failed', null, ['remember_me' => 'Choose whether to remember this login.'], 422);
+        }
+        $rememberMe = in_array($rememberValue, [true, 1, '1'], true);
         if ($email === '' || mb_strlen($email) > 150 || strlen((string)($data['password'] ?? '')) > 1024) {
             json_response(false, 'Invalid email or password', null, [], 401);
         }
@@ -870,7 +875,7 @@ try {
         clear_login_attempts($email);
         audit_log((int)$user['id'], 'login', 'auth', (int)$user['id'], 'User logged in');
         unset($user['password_hash']);
-        json_response(true, 'Login successful', ['token' => token_for($user), 'user' => $user]);
+        json_response(true, 'Login successful', ['token' => token_for($user, $rememberMe), 'user' => $user]);
     }
     if ($parts === ['auth', 'logout'] && $method === 'POST') {
         $logoutUser = require_user();

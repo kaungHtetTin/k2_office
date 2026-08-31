@@ -20,15 +20,18 @@ function base64url_decode_data(string $data): string|false
     return base64_decode(strtr($data, '-_', '+/'));
 }
 
-function token_for(array $user): string
+function token_for(array $user, bool $rememberMe = false): string
 {
-    $ttl = max(900, min(86400, (int)(getenv('JWT_TTL_SECONDS') ?: 28800)));
+    $ttl = $rememberMe
+        ? max(86400, min(7776000, (int)(getenv('JWT_REMEMBER_TTL_SECONDS') ?: 2592000)))
+        : max(900, min(86400, (int)(getenv('JWT_TTL_SECONDS') ?: 28800)));
     $header = base64url_encode_data(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
     $payload = base64url_encode_data(json_encode([
         'sub' => (int)$user['id'],
         'name' => $user['name'],
         'email' => $user['email'],
         'role' => $user['role'],
+        'remember_me' => $rememberMe,
         'iat' => time(),
         'exp' => time() + $ttl,
         'jti' => bin2hex(random_bytes(16)),

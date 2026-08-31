@@ -17,6 +17,12 @@ function Assert-Money($Actual, [double]$Expected, [string]$Message) {
     Assert-True ([Math]::Abs([double]$Actual - $Expected) -lt 0.005) "$Message (expected $Expected, got $Actual)"
 }
 
+function Read-JwtPayload([string]$Token) {
+    $part = $Token.Split('.')[1].Replace('-', '+').Replace('_', '/')
+    while ($part.Length % 4) { $part += '=' }
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($part)) | ConvertFrom-Json
+}
+
 function Invoke-Envelope([string]$Method, [string]$Path, $Body = $null, $Headers = $script:AdminHeaders) {
     $params = @{ Method = $Method; Uri = "$BaseUrl$Path"; Headers = $Headers }
     if ($null -ne $Body) {
@@ -44,6 +50,14 @@ function Expect-Status([int]$Status, [string]$Method, [string]$Path, $Body = $nu
 
 $login = Invoke-Envelope 'POST' '/auth/login' @{ email = $AdminEmail; password = $AdminPassword } @{}
 $script:AdminHeaders = @{ Authorization = "Bearer $($login.data.token)" }
+$sessionPayload = Read-JwtPayload $login.data.token
+Assert-True (-not [bool]$sessionPayload.remember_me) 'Normal login token is session-only'
+Assert-True (([long]$sessionPayload.exp - [long]$sessionPayload.iat) -le 86400) 'Normal login token lasts no more than one day'
+$rememberedLogin = Invoke-Envelope 'POST' '/auth/login' @{ email = $AdminEmail; password = $AdminPassword; remember_me = $true } @{}
+$rememberedPayload = Read-JwtPayload $rememberedLogin.data.token
+Assert-True ([bool]$rememberedPayload.remember_me) 'Remembered login token is marked persistent'
+Assert-True (([long]$rememberedPayload.exp - [long]$rememberedPayload.iat) -ge 2592000) 'Remembered login token receives the long lifetime'
+Expect-Status 422 'POST' '/auth/login' @{ email = $AdminEmail; password = $AdminPassword; remember_me = 'invalid' } @{}
 $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 $today = Get-Date -Format 'yyyy-MM-dd'
 $yesterday = (Get-Date).AddDays(-1).ToString('yyyy-MM-dd')

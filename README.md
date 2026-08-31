@@ -32,6 +32,8 @@ Default login:
 - Email: `admin@example.com`
 - Password: `admin123456`
 
+Login sessions are browser-session-only by default. Selecting **Remember me on this device** stores the session persistently and uses the longer `JWT_REMEMBER_TTL_SECONDS` lifetime (30 days by default). Logout and authentication failures clear both session and persistent browser credentials.
+
 ### Upgrade an Existing Version 1 Database
 
 Back up important data, then import migrations from `database/migrate_v1_1.sql` through `database/migrate_v1_11_manual_invoice_amounts.sql` in filename order. These idempotent migrations keep existing financial history, add the Version 1 features and performance indexes, remove obsolete Project Generated recurring rows, and add customizable installment invoices. Do not re-import `schema.sql` over a database containing real data because the fresh-install script recreates all tables.
@@ -153,7 +155,7 @@ Get-Content -Raw ksspm-backup.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
 
 - Follow the complete checklist in PRODUCTION_DEPLOYMENT.md.
 - Run `npm run build` inside `frontend`; the production files are emitted into the repository root for direct deployment. The production API endpoint is `/backend`.
-- Set `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `APP_TIMEZONE`, `DB_TIMEZONE`, and a strong `JWT_SECRET` in the server environment. The local defaults use `Asia/Yangon` and `+06:30`.
+- Set `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `APP_TIMEZONE`, `DB_TIMEZONE`, `JWT_TTL_SECONDS`, `JWT_REMEMBER_TTL_SECONDS`, and a strong `JWT_SECRET` in the server environment. The local defaults use `Asia/Yangon` and `+06:30`.
 - Change the seeded Admin password after the first login.
 - Keep PHP error display disabled on production and retain database backups before updates.
 - Keep `activity_logs` as the audit trail. For very large installations, archive old rows only after a verified database backup; do not routinely delete current financial audit data.
