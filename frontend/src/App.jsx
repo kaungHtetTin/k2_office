@@ -10,7 +10,6 @@ const paymentStatuses = ['Unpaid', 'Partially Paid', 'Fully Paid', 'Overdue']
 const paymentMethods = ['Cash', 'KPay', 'WavePay', 'Bank Transfer', 'AYA Pay', 'CB Pay', 'Other']
 const feeTypes = ['Server', 'VPS', 'SSL', 'Maintenance', 'API Subscription', 'Other']
 const billingCycles = ['Monthly', 'Quarterly', 'Half Yearly', 'Yearly', 'One Time']
-const expenseCategories = ['Domain Purchase', 'Hosting Purchase', 'VPS Purchase', 'Server Cost', 'SSL Cost', 'API Cost', 'SMS Cost', 'Developer Cost', 'Design Cost', 'Transport', 'Other']
 const invoiceTypes = ['Project Invoice', 'Upfront Invoice', 'Progress Invoice', 'Final Invoice', 'Hosting Invoice', 'Domain Invoice', 'Maintenance Invoice', 'Other']
 const invoiceBlockNames = { header: 'Header', meta: 'Customer & Invoice', callout: 'Payment Callout', table: 'Items Table', summary: 'Totals', notes: 'Notes', footer: 'Payment & Contact' }
 const invoiceFontFamilies = ['Inter, Segoe UI, Arial, sans-serif', 'Arial, Helvetica, sans-serif', 'Georgia, Times New Roman, serif', 'Courier New, monospace']
@@ -158,7 +157,7 @@ function App() {
     return <LoginPage onLogin={handleLogin} />
   }
 
-  const nav = ['Dashboard', 'Projects', 'Payments', 'Domain Billing', 'User Financial', 'Recurring Fees', 'Expenses', 'Invoices', 'Receipts', 'Reminders', 'Reports', ...(user?.role === 'Admin' ? ['Users', 'Settings'] : [])]
+  const nav = ['Dashboard', 'Projects', 'Payments', 'Domain Billing', 'Company Financial', 'Recurring Fees', 'Expenses', 'Invoices', 'Receipts', 'Reminders', 'Reports', ...(user?.role === 'Admin' ? ['Users', 'Settings'] : [])]
 
   return (
     <div className="app-shell">
@@ -188,9 +187,9 @@ function App() {
         {active === 'Projects' && <Projects api={api} canWrite={user?.role !== 'Viewer'} />}
         {active === 'Payments' && <GenericModule api={api} title="Payments" endpoint="/payments" fields={paymentFields} columns={paymentColumns} options={{ payment_type: ['Upfront','Progress Payment','Final Payment','Other'] }} filters={['search','project_id','financial_account_id','date_from','date_to']} canWrite={user?.role !== 'Viewer'} />}
         {active === 'Domain Billing' && <DomainBilling api={api} canWrite={user?.role !== 'Viewer'} />}
-        {active === 'User Financial' && <UserFinancial api={api} canWrite={user?.role !== 'Viewer'} canManage={user?.role === 'Admin'} />}
+        {active === 'Company Financial' && <UserFinancial api={api} canWrite={user?.role !== 'Viewer'} canManage={user?.role === 'Admin'} />}
         {active === 'Recurring Fees' && <GenericModule api={api} title="Recurring Fees" endpoint="/recurring-fees" fields={feeFields} columns={feeColumns} options={{ fee_type: feeTypes, source_type: ['Manual','Domain Billing'], billing_cycle: billingCycles, status: ['Not Due', 'Due Soon', 'Due Today', 'Overdue', 'Paid', 'Cancelled'] }} filters={['search','fee_type','source_type','status','date_from','date_to']} canWrite={user?.role !== 'Viewer'} markPaid />}
-        {active === 'Expenses' && <GenericModule api={api} title="Expenses" endpoint="/expenses" fields={expenseFields} columns={expenseColumns} options={{ expense_category: expenseCategories, payment_method: paymentMethods }} filters={['search','project_id','expense_category','payment_method','date_from','date_to']} canWrite={user?.role !== 'Viewer'} />}
+        {active === 'Expenses' && <Expenses api={api} canWrite={user?.role !== 'Viewer'} canManage={user?.role === 'Admin'} />}
         {active === 'Invoices' && <Invoices api={api} canWrite={user?.role !== 'Viewer'} />}
         {active === 'Receipts' && <GenericModule api={api} title="Receipts" endpoint="/receipts" fields={receiptFields} columns={receiptColumns} options={{ payment_method: paymentMethods }} filters={['search','project_id','date_from','date_to']} canWrite={user?.role !== 'Viewer'} />}
         {active === 'Reminders' && <Reminders api={api} onNavigate={setActive} canWrite={user?.role !== 'Viewer'} />}
@@ -203,7 +202,7 @@ function App() {
 }
 
 function iconFor(item) {
-  const Icon = ({ Dashboard: LayoutDashboard, Projects: FolderKanban, Payments: WalletCards, 'Domain Billing': Globe2, 'User Financial': Landmark, 'Recurring Fees': RefreshCw, Expenses: MinusCircle, Invoices: FileText, Receipts: ReceiptText, Reminders: Bell, Reports: BarChart3, Users: UsersIcon, Settings: SettingsIcon })[item] || CheckCircle2
+  const Icon = ({ Dashboard: LayoutDashboard, Projects: FolderKanban, Payments: WalletCards, 'Domain Billing': Globe2, 'Company Financial': Landmark, 'Recurring Fees': RefreshCw, Expenses: MinusCircle, Invoices: FileText, Receipts: ReceiptText, Reminders: Bell, Reports: BarChart3, Users: UsersIcon, Settings: SettingsIcon })[item] || CheckCircle2
   return <Icon size={18} strokeWidth={1.8} />
 }
 
@@ -717,6 +716,14 @@ function Invoices({ api, canWrite }) {
     } catch (err) { setError(err.message) } finally { setSaving(false) }
   }
   async function show(id) { try { setPreview(await api.request(`/invoices/${id}`)) } catch (err) { setError(err.message) } }
+  function printInvoice() {
+    const cleanup = () => document.body.classList.remove('printing-invoice')
+    document.body.classList.add('printing-invoice')
+    window.addEventListener('afterprint', cleanup, { once: true })
+    requestAnimationFrame(() => {
+      try { window.print() } catch (error) { cleanup(); throw error }
+    })
+  }
   async function edit(id) { try { setEditing(await api.request(`/invoices/${id}`)) } catch (err) { setError(err.message) } }
   async function remove(id) {
     if (!confirm('Delete this invoice?')) return
@@ -730,7 +737,7 @@ function Invoices({ api, canWrite }) {
     {loading ? <Loading label="Loading invoices" /> : <Table rows={rows} columns={invoiceColumns} actions={(row) => <><ActionButton label="Preview invoice" icon={Eye} onClick={() => show(row.id)} />{canWrite && <ActionButton label="Edit invoice" icon={Pencil} onClick={() => edit(row.id)} />}{canWrite && <ActionButton label="Delete invoice" icon={Trash2} danger onClick={() => remove(row.id)} />}</>} />}
     <Pagination value={pagination} onChange={setPage} />
     {editing && <FullScreenWorkspace title={editing.id ? `Edit ${editing.invoice_number}` : 'Generate Invoice'} onClose={() => setEditing(null)}>{error && <div className="modal-alert alert">{error}</div>}<InvoiceEditor api={api} initial={editing} projects={projects} settings={settings} onSubmit={save} submitting={saving} /></FullScreenWorkspace>}
-    {preview && <FullScreenWorkspace title={preview.invoice_number} onClose={() => setPreview(null)} actions={<button className="primary" onClick={() => window.print()}>Save Softcopy PDF</button>}><div className="invoice-full-preview"><InvoiceA4 invoice={preview} project={preview} settings={preview.settings || settings} /></div></FullScreenWorkspace>}
+    {preview && <FullScreenWorkspace className="invoice-print-workspace" title={preview.invoice_number} onClose={() => setPreview(null)} actions={<button className="primary" onClick={printInvoice}>Save Softcopy PDF</button>}><div className="invoice-full-preview"><InvoiceA4 invoice={preview} project={preview} settings={preview.settings || settings} /></div></FullScreenWorkspace>}
   </section>
 }
 
@@ -911,6 +918,106 @@ function Reminders({ api, onNavigate, canWrite }) {
   </section>
 }
 
+function Expenses({ api, canWrite, canManage }) {
+  const emptyExpense = { expense_date: today(), expense_scope: 'Company', project_id: '', expense_category_id: '', subcategory: '', amount: '', paid_to: '', payment_method: 'Bank Transfer', financial_account_id: '', expense_status: 'Paid', expense_frequency: 'One Time', billing_cycle: '', billing_period: '', is_historical: 0, reference_number: '', notes: '' }
+  const [rows, setRows] = useState([])
+  const [projects, setProjects] = useState([])
+  const [accounts, setAccounts] = useState([])
+  const [categories, setCategories] = useState([])
+  const [analytics, setAnalytics] = useState({ summary: {}, by_category: [], by_vendor: [] })
+  const [editing, setEditing] = useState(null)
+  const [categoryEditing, setCategoryEditing] = useState(null)
+  const [filters, setFilters] = useState({ search: '', project_id: '', expense_scope: '', expense_category_id: '', expense_status: '', expense_frequency: '', financial_account_id: '', date_from: '', date_to: '' })
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const debouncedSearch = useDebouncedValue(filters.search)
+  const query = new URLSearchParams({ ...filters, search: debouncedSearch, page: String(page), limit: '25' }).toString()
+  const analyticsQuery = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([key, value]) => value && key !== 'search'))).toString()
+  const load = useCallback(async () => {
+    try {
+      setLoading(true); setError('')
+      const [expenseData, categoryData, analyticsData] = await Promise.all([api.request(`/expenses?${query}`), api.request('/expense-categories?all=1'), api.request(`/reports/expense-analytics?${analyticsQuery}`)])
+      setRows(expenseData.rows || expenseData); setPagination(expenseData.pagination || { page: 1, pages: 1, total: expenseData.length }); setCategories(categoryData); setAnalytics(analyticsData)
+    } catch (err) { setError(err.message) } finally { setLoading(false) }
+  }, [api, query, analyticsQuery])
+  useEffect(() => { load() }, [load])
+  useEffect(() => { Promise.all([api.request('/projects?compact=1'), api.request('/financial-accounts')]).then(([projectRows, accountRows]) => { setProjects(projectRows); setAccounts(accountRows) }).catch((err) => setError(err.message)) }, [api])
+  async function save(data) {
+    if (saving) return
+    setSaving(true); setError('')
+    try { await api.request(`/expenses${data.id ? `/${data.id}` : ''}`, { method: data.id ? 'PUT' : 'POST', body: JSON.stringify(data) }); setEditing(null); await load() } catch (err) { setError(err.message) } finally { setSaving(false) }
+  }
+  async function remove(row) {
+    if (!confirm('Delete this expense? Its linked account movement will also be reversed.')) return
+    try { await api.request(`/expenses/${row.id}`, { method: 'DELETE' }); await load() } catch (err) { setError(err.message) }
+  }
+  async function saveCategory(data) {
+    if (saving) return
+    setSaving(true); setError('')
+    try { await api.request(`/expense-categories${data.id ? `/${data.id}` : ''}`, { method: data.id ? 'PUT' : 'POST', body: JSON.stringify(data) }); setCategoryEditing(null); await load() } catch (err) { setError(err.message) } finally { setSaving(false) }
+  }
+  const summary = analytics.summary || {}
+  const setFilter = (name, value) => { setFilters({ ...filters, [name]: value }); setPage(1) }
+  const columns = [{ key: 'expense_date', label: 'Date' }, { key: 'expense_scope', label: 'Scope' }, { key: 'project_name', label: 'Project' }, { key: 'expense_category', label: 'Category' }, { key: 'paid_to', label: 'Payee / Vendor' }, { key: 'amount' }, { key: 'expense_status', label: 'Status' }, { key: 'financial_account_name', label: 'Paid From' }]
+  return <section className="page expenses-page">
+    <div className="toolbar"><div><h2>Expenses</h2><p className="muted">One ledger for project costs, salaries, software, AI tools, and company overhead.</p></div><div className="actions">{canManage && <button onClick={() => setCategoryEditing({ name: '', category_group: 'Other', status: 'Active', sort_order: 0 })}>Manage Categories</button>}{canWrite && <button className="primary" onClick={() => setEditing(emptyExpense)}><Plus size={16} />Add Expense</button>}</div></div>
+    <div className="summary-grid expense-summary"><Card label="This Month" value={currency(summary.this_month_expenses)} /><Card label="Total (Filtered)" value={currency(summary.total_expenses)} /><Card label="Project Costs" value={currency(summary.project_expenses)} /><Card label="Company Overhead" value={currency(summary.overhead_expenses)} /><Card label="Staff & Salaries" value={currency(summary.staff_costs)} /><Card label="Software & AI" value={currency(summary.software_costs)} /><Card label="Committed / Unpaid" value={currency(summary.committed_costs)} /></div>
+    <FilterDrawer title="Expense filters" activeCount={Object.values(filters).filter(Boolean).length} onClear={() => { setFilters({ search: '', project_id: '', expense_scope: '', expense_category_id: '', expense_status: '', expense_frequency: '', financial_account_id: '', date_from: '', date_to: '' }); setPage(1) }}><div className="filters">
+      <input type="search" placeholder="Search vendor, reference, project" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
+      <select value={filters.expense_scope} onChange={(e) => setFilter('expense_scope', e.target.value)}><option value="">All scopes</option><option>Project</option><option>Company</option></select>
+      <ProjectPicker api={api} projects={projects} value={filters.project_id} onChange={(value) => setFilter('project_id', value)} allOption />
+      <CategorySelect categories={categories} value={filters.expense_category_id} onChange={(value) => setFilter('expense_category_id', value)} allOption />
+      <select value={filters.expense_status} onChange={(e) => setFilter('expense_status', e.target.value)}><option value="">All statuses</option><option>Planned</option><option>Unpaid</option><option>Paid</option></select>
+      <select value={filters.expense_frequency} onChange={(e) => setFilter('expense_frequency', e.target.value)}><option value="">All frequencies</option><option>One Time</option><option>Recurring</option></select>
+      <select value={filters.financial_account_id} onChange={(e) => setFilter('financial_account_id', e.target.value)}><option value="">All accounts</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select>
+      <input aria-label="Date from" type="date" value={filters.date_from} onChange={(e) => setFilter('date_from', e.target.value)} /><input aria-label="Date to" type="date" value={filters.date_to} onChange={(e) => setFilter('date_to', e.target.value)} />
+    </div></FilterDrawer>
+    {error && <div className="alert">{error}</div>}
+    {loading ? <Loading label="Loading expenses" /> : <><Table rows={rows} columns={columns} actions={(row) => canWrite && !row.domain_billing_period_id ? <><ActionButton label="Edit expense" icon={Pencil} onClick={() => setEditing(row)} /><ActionButton label="Delete expense" icon={Trash2} danger onClick={() => remove(row)} /></> : null} /><Pagination value={pagination} onChange={setPage} /></>}
+    <div className="analytics-grid"><Panel title="Largest Categories"><Table rows={(analytics.by_category || []).slice(0, 8)} columns={[{ key: 'name' }, { key: 'category_group', label: 'Group' }, { key: 'expense_count', label: 'Entries' }, { key: 'total' }]} /></Panel><Panel title="Top Payees / Vendors"><Table rows={analytics.by_vendor || []} columns={[{ key: 'name' }, { key: 'expense_count', label: 'Entries' }, { key: 'total' }]} /></Panel></div>
+    {editing && <Modal title={editing.id ? 'Edit Expense' : 'Add Expense'} onClose={() => setEditing(null)} wide>{error && <div className="modal-alert alert">{error}</div>}<ExpenseForm initial={editing} projects={projects} accounts={accounts} categories={categories} onSubmit={save} submitting={saving} /></Modal>}
+    {categoryEditing && <Modal title="Expense Categories" onClose={() => setCategoryEditing(null)} wide>{error && <div className="modal-alert alert">{error}</div>}<CategoryManager categories={categories} editing={categoryEditing} setEditing={setCategoryEditing} onSave={saveCategory} submitting={saving} /></Modal>}
+  </section>
+}
+
+function CategorySelect({ categories, value, onChange, allOption = false, required = false }) {
+  const groups = categories.reduce((map, category) => ({ ...map, [category.category_group]: [...(map[category.category_group] || []), category] }), {})
+  return <select required={required} value={value || ''} onChange={(event) => onChange(event.target.value)}><option value="">{allOption ? 'All categories' : 'Choose category'}</option>{Object.entries(groups).map(([group, items]) => <optgroup key={group} label={group}>{items.map((category) => <option key={category.id} value={category.id}>{category.name}{category.status === 'Inactive' ? ' (Inactive)' : ''}</option>)}</optgroup>)}</select>
+}
+
+function ExpenseForm({ initial, projects, accounts, categories, onSubmit, submitting }) {
+  const [form, setForm] = useState(initial)
+  const set = (key, value) => setForm({ ...form, [key]: value })
+  const activeCategories = categories.filter((category) => category.status === 'Active' || String(category.id) === String(initial.expense_category_id))
+  const activeAccounts = accounts.filter((account) => account.status === 'Active' || String(account.id) === String(initial.financial_account_id))
+  const affectsBalance = form.expense_status === 'Paid' && !Number(form.is_historical)
+  return <form className="form-grid" onSubmit={(event) => { event.preventDefault(); onSubmit(form) }}>
+    <label>Date<input required type="date" value={form.expense_date || ''} onChange={(e) => set('expense_date', e.target.value)} /></label>
+    <label>Scope<select required value={form.expense_scope || 'Company'} onChange={(e) => setForm({ ...form, expense_scope: e.target.value, project_id: e.target.value === 'Company' ? '' : form.project_id })}><option>Company</option><option>Project</option></select></label>
+    {form.expense_scope === 'Project' && <div className="full"><ProjectPicker projects={projects} value={form.project_id} onChange={(value) => set('project_id', value)} required /></div>}
+    <label>Category<CategorySelect required categories={activeCategories} value={form.expense_category_id} onChange={(value) => set('expense_category_id', value)} /></label>
+    <label>Subcategory<input maxLength="100" value={form.subcategory || ''} onChange={(e) => set('subcategory', e.target.value)} /></label>
+    <label>Amount<input required min="0.01" step="0.01" type="number" value={form.amount || ''} onChange={(e) => set('amount', e.target.value)} /></label>
+    <label>Payee / Vendor / Staff<input maxLength="255" value={form.paid_to || ''} onChange={(e) => set('paid_to', e.target.value)} /></label>
+    <label>Status<select required value={form.expense_status || 'Paid'} onChange={(e) => setForm({ ...form, expense_status: e.target.value, financial_account_id: e.target.value === 'Paid' ? form.financial_account_id : '' })}><option>Planned</option><option>Unpaid</option><option>Paid</option></select></label>
+    <label>Frequency<select required value={form.expense_frequency || 'One Time'} onChange={(e) => set('expense_frequency', e.target.value)}><option>One Time</option><option>Recurring</option></select></label>
+    {form.expense_frequency === 'Recurring' && <label>Billing Cycle<select required value={form.billing_cycle || ''} onChange={(e) => set('billing_cycle', e.target.value)}><option value="">Choose cycle</option><option>Monthly</option><option>Quarterly</option><option>Half Yearly</option><option>Yearly</option><option>Other</option></select></label>}
+    <label>Billing Period<input maxLength="50" placeholder="e.g. August 2026" value={form.billing_period || ''} onChange={(e) => set('billing_period', e.target.value)} /></label>
+    {form.expense_status === 'Paid' && <><label>Payment Method<select value={form.payment_method || 'Other'} onChange={(e) => set('payment_method', e.target.value)}>{paymentMethods.map((method) => <option key={method}>{method}</option>)}</select></label><label>Paid From<select required={affectsBalance} disabled={!affectsBalance} value={form.financial_account_id || ''} onChange={(e) => set('financial_account_id', e.target.value)}><option value="">Choose account</option>{activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {currency(account.balance)}</option>)}</select></label><label className="check-row full"><input type="checkbox" checked={Boolean(Number(form.is_historical))} onChange={(e) => setForm({ ...form, is_historical: e.target.checked ? 1 : 0, financial_account_id: e.target.checked ? '' : form.financial_account_id })} />Historical expense (record only; do not change an account balance)</label></>}
+    <label>Reference<input maxLength="150" value={form.reference_number || ''} onChange={(e) => set('reference_number', e.target.value)} /></label>
+    <label className="full">Notes<textarea value={form.notes || ''} onChange={(e) => set('notes', e.target.value)} /></label>
+    <div className="form-actions"><button className="primary" disabled={submitting}>{submitting ? 'Saving…' : 'Save Expense'}</button></div>
+  </form>
+}
+
+function CategoryManager({ categories, editing, setEditing, onSave, submitting }) {
+  const groups = ['Staff & People','Software & Technology','Office & Operations','Business Administration','Other']
+  return <div className="category-manager"><form className="form-grid" onSubmit={(event) => { event.preventDefault(); onSave(editing) }}><label>Name<input required maxLength="100" value={editing.name || ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label><label>Group<select value={editing.category_group || 'Other'} onChange={(e) => setEditing({ ...editing, category_group: e.target.value })}>{groups.map((group) => <option key={group}>{group}</option>)}</select></label><label>Status<select value={editing.status || 'Active'} onChange={(e) => setEditing({ ...editing, status: e.target.value })}><option>Active</option><option>Inactive</option></select></label><label>Sort Order<input type="number" step="1" value={editing.sort_order ?? 0} onChange={(e) => setEditing({ ...editing, sort_order: e.target.value })} /></label><div className="form-actions"><button className="primary" disabled={submitting}>{editing.id ? 'Update Category' : 'Add Category'}</button>{editing.id && <button type="button" onClick={() => setEditing({ name: '', category_group: 'Other', status: 'Active', sort_order: 0 })}>New Category</button>}</div></form><Table rows={categories} columns={[{ key: 'name' }, { key: 'category_group', label: 'Group' }, { key: 'status' }, { key: 'sort_order', label: 'Order' }]} actions={(category) => <ActionButton label="Edit category" icon={Pencil} onClick={() => setEditing(category)} />} /></div>
+}
+
 function UserFinancial({ api, canWrite, canManage }) {
   const [accounts, setAccounts] = useState([])
   const [rows, setRows] = useState([])
@@ -965,15 +1072,15 @@ function UserFinancial({ api, canWrite, canManage }) {
   const totalBalance = accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0)
   const activeAccountCount = accounts.filter((account) => account.status === 'Active').length
   const setFilter = (name, value) => { setFilters({ ...filters, [name]: value }); setPage(1) }
-  const columns = [{ key: 'transaction_date', label: 'Date' }, { key: 'transaction_type', label: 'Movement' }, { key: 'from_account_name', label: 'From / Used By' }, { key: 'to_account_name', label: 'To / Received By' }, { key: 'project_name', label: 'Project' }, { key: 'amount' }]
+  const columns = [{ key: 'transaction_date', label: 'Date' }, { key: 'transaction_type', label: 'Movement' }, { key: 'source_type', label: 'Source' }, { key: 'manual_use_type', label: 'Purpose' }, { key: 'from_account_name', label: 'From / Used By' }, { key: 'to_account_name', label: 'To / Received By' }, { key: 'project_name', label: 'Project' }, { key: 'expense_category', label: 'Expense Category' }, { key: 'amount' }]
   const accountColumns = [{ key: 'name' }, { key: 'opening_balance' }, { key: 'balance' }, { key: 'status' }]
   return <section className="page financial-page">
-    <div className="toolbar"><h2>User Financial</h2><div className="actions">{canManage && <button onClick={() => { setError(''); setAccountEditing({ name: '', opening_balance: 0, status: 'Active' }) }}><Plus size={16} />Add Account</button>}{canWrite && <><button disabled={activeAccountCount < 1} onClick={() => { setError(''); setEditing({ transaction_type: 'Use', transaction_date: today(), from_account_id: '', to_account_id: '', amount: '', notes: '' }) }}>Use Money</button><button className="primary" disabled={activeAccountCount < 2} onClick={() => { setError(''); setEditing({ transaction_type: 'Transfer', transaction_date: today(), from_account_id: '', to_account_id: '', amount: '', notes: '' }) }}>Transfer</button></>}</div></div>
+    <div className="toolbar"><div><h2>Company Financial</h2><p className="muted">Account balances combine customer receipts, paid expenses, transfers, and explicit non-expense adjustments.</p></div><div className="actions">{canManage && <button onClick={() => { setError(''); setAccountEditing({ name: '', opening_balance: 0, status: 'Active' }) }}><Plus size={16} />Add Account</button>}{canWrite && <><button disabled={activeAccountCount < 1} onClick={() => { setError(''); setEditing({ transaction_type: 'Use', transaction_date: today(), from_account_id: '', to_account_id: '', amount: '', manual_use_type: 'Owner Withdrawal', notes: '' }) }}>Non-expense Use</button><button className="primary" disabled={activeAccountCount < 2} onClick={() => { setError(''); setEditing({ transaction_type: 'Transfer', transaction_date: today(), from_account_id: '', to_account_id: '', amount: '', manual_use_type: '', notes: '' }) }}>Transfer</button></>}</div></div>
     <div className="summary-grid financial-summary">{accounts.map((account) => <Card key={account.id} label={account.name} value={currency(account.balance)} />)}<Card label="Combined Balance" value={currency(totalBalance)} /></div>
     <Panel title="Financial Accounts"><PaginatedTable rows={accounts} columns={accountColumns} actions={canManage ? (account) => <><ActionButton label="Edit account" icon={Pencil} onClick={() => { setError(''); setAccountEditing(account) }} /><ActionButton label="Delete account" icon={Trash2} danger onClick={() => removeAccount(account.id)} /></> : null} /></Panel>
     <FilterDrawer title="Financial history filters" activeCount={Object.values(filters).filter(Boolean).length + (period !== 'month' ? 1 : 0)} onClear={() => { setFilters({ search: '', transaction_type: '', account_id: '', date_from: '', date_to: '' }); setPeriod('month'); setPage(1) }}><div className="filters"><label>Period<span className="period-control" role="group" aria-label="Financial period">{[['today','Today'],['week','Week'],['month','Month'],['lifetime','Lifetime']].map(([value, text]) => <button type="button" key={value} className={period === value ? 'active' : ''} onClick={() => { setPeriod(value); setPage(1) }}>{text}</button>)}</span></label><input type="search" placeholder="Search notes or project" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} /><select value={filters.transaction_type} onChange={(e) => setFilter('transaction_type', e.target.value)}><option value="">All movements</option><option>Receive</option><option>Use</option><option>Transfer</option></select><select value={filters.account_id} onChange={(e) => setFilter('account_id', e.target.value)}><option value="">All accounts</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select><input aria-label="Date from" type="date" value={dates.date_from} onChange={(e) => { setPeriod('custom'); setFilter('date_from', e.target.value) }} /><input aria-label="Date to" type="date" value={dates.date_to} onChange={(e) => { setPeriod('custom'); setFilter('date_to', e.target.value) }} /></div></FilterDrawer>
     {error && <div className="alert">{error}</div>}
-    {loading ? <Loading label="Loading financial history" /> : <Table rows={rows} columns={columns} actions={(row) => row.transaction_type !== 'Receive' && !row.domain_billing_period_id && canWrite ? <><ActionButton label="Edit transaction" icon={Pencil} onClick={() => setEditing(row)} /><ActionButton label="Delete transaction" icon={Trash2} danger onClick={() => remove(row.id)} /></> : null} />}
+    {loading ? <Loading label="Loading financial history" /> : <Table rows={rows} columns={columns} actions={(row) => row.transaction_type !== 'Receive' && !row.domain_billing_period_id && !row.expense_id && canWrite ? <><ActionButton label="Edit transaction" icon={Pencil} onClick={() => setEditing(row)} /><ActionButton label="Delete transaction" icon={Trash2} danger onClick={() => remove(row.id)} /></> : null} />}
     <Pagination value={pagination} onChange={setPage} />
     {editing && <Modal title={editing.id ? `Edit ${editing.transaction_type}` : editing.transaction_type} onClose={() => setEditing(null)}>{error && <div className="modal-alert alert">{error}</div>}<FinancialTransactionForm initial={editing} accounts={accounts} onSubmit={save} submitting={saving} /></Modal>}
     {accountEditing && <Modal title={accountEditing.id ? 'Edit Financial Account' : 'Add Financial Account'} onClose={() => setAccountEditing(null)}>{error && <div className="modal-alert alert">{error}</div>}<FinancialAccountForm initial={accountEditing} onSubmit={saveAccount} submitting={saving} /></Modal>}
@@ -995,6 +1102,7 @@ function FinancialTransactionForm({ initial, accounts, onSubmit, submitting }) {
   const activeAccounts = accounts.filter((account) => account.status === 'Active' || [initial.from_account_id, initial.to_account_id].map(String).includes(String(account.id)))
   return <form className="form-grid" onSubmit={(event) => { event.preventDefault(); onSubmit(form) }}>
     <label>Date<input required type="date" value={form.transaction_date || ''} onChange={(event) => setForm({ ...form, transaction_date: event.target.value })} /></label>
+    {form.transaction_type === 'Use' && <label>Purpose<select required value={form.manual_use_type || ''} onChange={(event) => setForm({ ...form, manual_use_type: event.target.value })}><option value="">Choose purpose</option><option>Owner Withdrawal</option><option>Cash Adjustment</option><option>Loan Repayment</option><option>Non-expense Balance Correction</option><option>Other</option></select></label>}
     <label>{form.transaction_type === 'Use' ? 'Used By' : 'From'}<select required value={form.from_account_id || ''} onChange={(event) => setForm({ ...form, from_account_id: event.target.value })}><option value="">Choose account</option>{activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}{account.status === 'Inactive' ? ' (Inactive)' : ''} · {currency(account.balance)}</option>)}</select></label>
     {form.transaction_type === 'Transfer' && <label>To<select required value={form.to_account_id || ''} onChange={(event) => setForm({ ...form, to_account_id: event.target.value })}><option value="">Choose account</option>{activeAccounts.filter((account) => String(account.id) !== String(form.from_account_id)).map((account) => <option key={account.id} value={account.id}>{account.name}{account.status === 'Inactive' ? ' (Inactive)' : ''}</option>)}</select></label>}
     <label>Amount<input required type="number" min="0.01" step="0.01" value={form.amount || ''} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></label>
@@ -1005,23 +1113,25 @@ function FinancialTransactionForm({ initial, accounts, onSubmit, submitting }) {
 
 function Reports({ api }) {
   const reportKinds = [
-    ['financial-overview','Financial Collection Overview'], ['project-financial','Project Financial'], ['payment-collection','Payment Collection'], ['outstanding-balance','Outstanding Balance'], ['expense','Expenses'], ['profit','Profit'], ['recurring-fees','Recurring Fees'], ['domain-billing','Domain Billing'], ['invoice','Invoices'], ['monthly-income-expense','Monthly Income & Expense'],
+    ['financial-overview','Financial Collection Overview'], ['expense-analytics','Expense Analytics'], ['project-financial','Project Financial'], ['payment-collection','Payment Collection'], ['outstanding-balance','Outstanding Balance'], ['expense','Expense Ledger'], ['profit','Project Gross Profit'], ['recurring-fees','Recurring Fees'], ['domain-billing','Domain Billing'], ['invoice','Invoices'], ['monthly-income-expense','Monthly Income & Expense'],
   ]
   const [kind, setKind] = useState('financial-overview')
   const [period, setPeriod] = useState('month')
-  const emptyReportFilters = { project_id: '', financial_account_id: '', fee_type: '', expense_category: '', status: '', payment_status: '', purchase_status: '', payment_method: '', invoice_type: '', date_from: '', date_to: '' }
+  const emptyReportFilters = { project_id: '', financial_account_id: '', fee_type: '', expense_category_id: '', expense_scope: '', expense_status: '', expense_frequency: '', status: '', payment_status: '', purchase_status: '', payment_method: '', invoice_type: '', date_from: '', date_to: '' }
   const [filters, setFilters] = useState(emptyReportFilters)
   const [projects, setProjects] = useState([])
   const [financialAccounts, setFinancialAccounts] = useState([])
+  const [expenseCategoryRows, setExpenseCategoryRows] = useState([])
   const [data, setData] = useState({ summary: {}, payments: [], outstanding_projects: [], recurring_fees: [] })
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   useEffect(() => { api.request('/projects?compact=1').then(setProjects).catch((err) => setError(err.message)) }, [api])
   useEffect(() => { api.request('/financial-accounts').then(setFinancialAccounts).catch((err) => setError(err.message)) }, [api])
+  useEffect(() => { api.request('/expense-categories?all=1').then(setExpenseCategoryRows).catch((err) => setError(err.message)) }, [api])
   useEffect(() => {
     setLoading(true); setError('')
-    const paged = !['financial-overview','monthly-income-expense'].includes(kind)
+    const paged = !['financial-overview','monthly-income-expense','expense-analytics'].includes(kind)
     const query = new URLSearchParams({ ...filters, ...(kind === 'financial-overview' ? { period } : {}), ...(paged ? { page: String(page), limit: '100' } : {}) })
     api.request(`/reports/${kind}?${query}`).then(setData).catch((err) => setError(err.message)).finally(() => setLoading(false))
   }, [api, kind, period, filters, page])
@@ -1034,7 +1144,7 @@ function Reports({ api }) {
     ...(data.domain_billings || []).map((row) => ({ record_type: 'Domain balance', date: row.customer_due_date, project: row.project_name, customer: row.customer_company_name, category: row.domain_name || row.period_label, amount: row.customer_balance_amount, status: row.customer_payment_status })),
   ] : []
   const monthlyRows = kind === 'monthly-income-expense' ? mergeMonthly(data) : []
-  const rows = overview ? overviewRows : kind === 'monthly-income-expense' ? monthlyRows : Array.isArray(data) ? data : data.rows || []
+  const rows = overview ? overviewRows : kind === 'monthly-income-expense' ? monthlyRows : kind === 'expense-analytics' ? (data.by_category || []) : Array.isArray(data) ? data : data.rows || []
   const reportTitle = reportKinds.find(([value]) => value === kind)?.[1] || 'Report'
   const rangeLabel = overview && data.date_from ? `${data.date_from} to ${data.date_to}` : filters.date_from || filters.date_to ? `${filters.date_from || 'Beginning'} to ${filters.date_to || 'Today'}` : 'All dates'
   const setFilter = (name, value) => { setFilters({ ...filters, [name]: value }); setPage(1) }
@@ -1047,7 +1157,7 @@ function Reports({ api }) {
         {overview && <label className="report-filter-period">Period<span className="period-control" role="group" aria-label="Report period">{[['today','Today'],['week','This Week'],['month','This Month'],['lifetime','Lifetime']].map(([value, text]) => <button type="button" key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{text}</button>)}</span></label>}
         {(overview || kind === 'recurring-fees') && <label className="report-filter-select">Fee type<select value={filters.fee_type} onChange={(e) => setFilter('fee_type', e.target.value)}><option value="">All fee types</option>{feeTypes.map((type) => <option key={type}>{type}</option>)}</select></label>}
         {kind === 'domain-billing' && <><label className="report-filter-select">Payment<select value={filters.payment_status} onChange={(e) => setFilter('payment_status', e.target.value)}><option value="">All payment states</option>{['Not Priced','Unpaid','Partially Paid','Paid'].map((status) => <option key={status}>{status}</option>)}</select></label><label className="report-filter-select">Purchase<select value={filters.purchase_status} onChange={(e) => setFilter('purchase_status', e.target.value)}><option value="">All purchase states</option>{['Not Purchased','Active','Expired','Cancelled'].map((status) => <option key={status}>{status}</option>)}</select></label></>}
-        {kind === 'expense' && <><label className="report-filter-select">Category<select value={filters.expense_category} onChange={(e) => setFilter('expense_category', e.target.value)}><option value="">All expense categories</option>{expenseCategories.map((category) => <option key={category}>{category}</option>)}</select></label><label className="report-filter-select">Method<select value={filters.payment_method} onChange={(e) => setFilter('payment_method', e.target.value)}><option value="">All payment methods</option>{paymentMethods.map((method) => <option key={method}>{method}</option>)}</select></label></>}
+        {['expense','expense-analytics'].includes(kind) && <><label className="report-filter-select">Scope<select value={filters.expense_scope} onChange={(e) => setFilter('expense_scope', e.target.value)}><option value="">All scopes</option><option>Project</option><option>Company</option></select></label><label className="report-filter-select">Category<CategorySelect categories={expenseCategoryRows} value={filters.expense_category_id} onChange={(value) => setFilter('expense_category_id', value)} allOption /></label><label className="report-filter-select">Status<select value={filters.expense_status} onChange={(e) => setFilter('expense_status', e.target.value)}><option value="">All statuses</option><option>Planned</option><option>Unpaid</option><option>Paid</option></select></label><label className="report-filter-select">Frequency<select value={filters.expense_frequency} onChange={(e) => setFilter('expense_frequency', e.target.value)}><option value="">All frequencies</option><option>One Time</option><option>Recurring</option></select></label>{kind === 'expense' && <label className="report-filter-select">Method<select value={filters.payment_method} onChange={(e) => setFilter('payment_method', e.target.value)}><option value="">All payment methods</option>{paymentMethods.map((method) => <option key={method}>{method}</option>)}</select></label>}</>}
         {kind === 'payment-collection' && <label className="report-filter-select">Receiver<select value={filters.financial_account_id} onChange={(e) => setFilter('financial_account_id', e.target.value)}><option value="">All receivers</option>{financialAccounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>}
         {kind === 'invoice' && <><label className="report-filter-select">Invoice type<select value={filters.invoice_type} onChange={(e) => setFilter('invoice_type', e.target.value)}><option value="">All invoice types</option>{invoiceTypes.map((type) => <option key={type}>{type}</option>)}</select></label><label className="report-filter-select">Status<select value={filters.status} onChange={(e) => setFilter('status', e.target.value)}><option value="">All invoice statuses</option>{['Draft','Sent','Partially Paid','Paid','Overdue','Cancelled'].map((status) => <option key={status}>{status}</option>)}</select></label></>}
         {kind === 'recurring-fees' && <label className="report-filter-select">Status<select value={filters.status} onChange={(e) => setFilter('status', e.target.value)}><option value="">All fee statuses</option>{['Not Due','Due Soon','Due Today','Overdue','Paid','Cancelled'].map((status) => <option key={status}>{status}</option>)}</select></label>}
@@ -1063,8 +1173,16 @@ function Reports({ api }) {
       <Panel title="Project Balances to Collect"><PaginatedTable rows={data.outstanding_projects || []} columns={[{ key: 'project_code' }, { key: 'project_name' }, { key: 'contact_person', label: 'Owner' }, { key: 'contact_phone' }, { key: 'payment_due_date' }, { key: 'remaining_balance' }, { key: 'payment_status' }]} /></Panel>
       <Panel title="Domain Balances to Collect"><PaginatedTable rows={data.domain_billings || []} columns={[{ key: 'project_name' }, { key: 'domain_name', label: 'Domain' }, { key: 'period_label', label: 'Period' }, { key: 'customer_due_date' }, { key: 'customer_price' }, { key: 'customer_paid_amount', label: 'Paid' }, { key: 'customer_balance_amount', label: 'Balance' }, { key: 'customer_payment_status', label: 'Status' }]} /></Panel>
       <Panel title="Domain, Server & Recurring Fees"><PaginatedTable rows={data.recurring_fees || []} columns={[{ key: 'project_name' }, { key: 'fee_name' }, { key: 'fee_type' }, { key: 'amount' }, { key: 'next_due_date' }, { key: 'status' }]} /></Panel>
-    </> : <><Panel title={`${reportTitle} - ${rangeLabel}`}>{kind === 'monthly-income-expense' && <Suspense fallback={<Loading label="Loading chart" />}><MonthlyReportChart rows={monthlyRows} formatCurrency={currency} /></Suspense>}<Table rows={rows} columns={reportColumns(kind, rows)} /></Panel><Pagination value={data.pagination} onChange={setPage} /></>}
+    </> : kind === 'expense-analytics' ? <ExpenseAnalyticsReport data={data} rangeLabel={rangeLabel} /> : <><Panel title={`${reportTitle} - ${rangeLabel}`}>{kind === 'monthly-income-expense' && <Suspense fallback={<Loading label="Loading chart" />}><MonthlyReportChart rows={monthlyRows} formatCurrency={currency} /></Suspense>}<Table rows={rows} columns={reportColumns(kind, rows)} /></Panel><Pagination value={data.pagination} onChange={setPage} /></>}
   </section>
+}
+
+function ExpenseAnalyticsReport({ data, rangeLabel }) {
+  const summary = data.summary || {}
+  return <div className="expense-analytics-report">
+    <div className="summary-grid report-summary"><Card label="Income" value={currency(summary.total_income)} /><Card label="All Expenses" value={currency(summary.total_expenses)} /><Card label="Company Net Profit" value={currency(summary.company_net_profit)} /><Card label="Project Costs" value={currency(summary.project_expenses)} /><Card label="Overhead" value={currency(summary.overhead_expenses)} /><Card label="Staff & Salaries" value={currency(summary.staff_costs)} /><Card label="Software & AI" value={currency(summary.software_costs)} /><Card label="Recurring" value={currency(summary.recurring_costs)} /><Card label="One-time" value={currency(summary.one_time_costs)} /><Card label="Planned / Unpaid" value={currency(summary.committed_costs)} /></div>
+    <div className="analytics-grid"><Panel title={`Category Breakdown - ${rangeLabel}`}><Table rows={data.by_category || []} columns={[{ key: 'name' }, { key: 'category_group', label: 'Group' }, { key: 'expense_count', label: 'Entries' }, { key: 'total' }]} /></Panel><Panel title="Monthly Expense Trend"><Table rows={data.by_month || []} columns={[{ key: 'month' }, { key: 'total' }]} /></Panel><Panel title="Top Payees / Vendors"><Table rows={data.by_vendor || []} columns={[{ key: 'name' }, { key: 'expense_count', label: 'Entries' }, { key: 'total' }]} /></Panel><Panel title="Expenses by Financial Account"><Table rows={data.by_account || []} columns={[{ key: 'name' }, { key: 'total' }]} /></Panel></div>
+  </div>
 }
 
 function mergeMonthly(data) {
@@ -1081,6 +1199,7 @@ function reportColumns(kind, rows) {
     profit: [{ key: 'project_code' }, { key: 'project_name' }, { key: 'total_payable' }, { key: 'total_paid' }, { key: 'total_expenses' }, { key: 'profit' }],
     'payment-collection': paymentColumns,
     expense: expenseColumns,
+    'expense-analytics': [{ key: 'name' }, { key: 'category_group' }, { key: 'expense_count' }, { key: 'total' }],
     'recurring-fees': feeColumns,
     'domain-billing': [{ key: 'project_name' }, { key: 'domain_name', label: 'Domain' }, { key: 'period_label', label: 'Period' }, { key: 'customer_due_date' }, { key: 'customer_renewal_date' }, { key: 'coverage_end_date', label: 'Registrar Expiry' }, { key: 'customer_price' }, { key: 'customer_paid_amount', label: 'Paid' }, { key: 'customer_balance_amount', label: 'Balance' }, { key: 'actual_registrar_cost' }, { key: 'realized_domain_profit' }, { key: 'customer_payment_status', label: 'Payment' }, { key: 'effective_purchase_status', label: 'Purchase' }],
     invoice: invoiceColumns,
@@ -1286,7 +1405,7 @@ function Modal({ title, children, onClose, wide }) {
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div ref={modalRef} className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button className="icon-btn" aria-label="Close" onClick={onClose}><X size={19} /></button></header><div className="modal-body">{children}</div></div></div>
 }
 
-function FullScreenWorkspace({ title, children, onClose, actions }) {
+function FullScreenWorkspace({ title, children, onClose, actions, className = '' }) {
   useEffect(() => {
     const oldOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -1294,7 +1413,7 @@ function FullScreenWorkspace({ title, children, onClose, actions }) {
     window.addEventListener('keydown', close)
     return () => { window.removeEventListener('keydown', close); document.body.style.overflow = oldOverflow }
   }, [onClose])
-  return <div className="fullscreen-workspace" role="dialog" aria-modal="true" aria-label={title}>
+  return <div className={`fullscreen-workspace ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
     <header className="fullscreen-header"><div><h2>{title}</h2></div><div className="actions">{actions}<button className="icon-btn" aria-label="Close" title="Close" onClick={onClose}><X size={20} /></button></div></header>
     <div className="fullscreen-body">{children}</div>
   </div>
@@ -1331,13 +1450,12 @@ function exportCsv(rows, filename = 'report.csv') {
 const projectColumns = [{ key: 'project_code' }, { key: 'project_name' }, { key: 'customer_company_name', label: 'Customer' }, { key: 'contact_phone' }, { key: 'status' }, { key: 'contract_amount' }, { key: 'total_paid', label: 'Paid' }, { key: 'remaining_balance', label: 'Balance' }, { key: 'payment_status' }, { key: 'delivery_date' }]
 const paymentColumns = [{ key: 'payment_date' }, { key: 'project_code' }, { key: 'project_name' }, { key: 'customer_company_name', label: 'Customer' }, { key: 'payment_type', label: 'Stage' }, { key: 'payment_scope', label: 'For' }, { key: 'is_historical', label: 'Source' }, { key: 'domain_name', label: 'Domain' }, { key: 'amount' }, { key: 'financial_account_name', label: 'Received By' }, { key: 'recorded_by_name', label: 'Recorded By' }]
 const feeColumns = [{ key: 'project_name' }, { key: 'fee_name' }, { key: 'fee_type' }, { key: 'source_type', label: 'Source' }, { key: 'amount' }, { key: 'billing_cycle' }, { key: 'next_due_date' }, { key: 'status' }]
-const expenseColumns = [{ key: 'expense_date' }, { key: 'project_name' }, { key: 'expense_category' }, { key: 'domain_name', label: 'Domain' }, { key: 'amount' }, { key: 'paid_to' }, { key: 'payment_method' }, { key: 'created_by_name', label: 'Created By' }]
+const expenseColumns = [{ key: 'expense_date' }, { key: 'expense_scope', label: 'Scope' }, { key: 'project_name' }, { key: 'expense_category' }, { key: 'subcategory' }, { key: 'amount' }, { key: 'paid_to', label: 'Payee / Vendor' }, { key: 'expense_status', label: 'Status' }, { key: 'expense_frequency', label: 'Frequency' }, { key: 'financial_account_name', label: 'Paid From' }]
 const invoiceColumns = [{ key: 'invoice_number' }, { key: 'invoice_date' }, { key: 'project_name' }, { key: 'customer_company_name' }, { key: 'project_total_amount', label: 'Project Total' }, { key: 'previously_paid_amount', label: 'Already Paid' }, { key: 'total_amount', label: 'Current Asked' }, { key: 'remaining_project_amount', label: 'Remaining' }, { key: 'status' }]
 const receiptColumns = [{ key: 'receipt_number' }, { key: 'receipt_date' }, { key: 'project_name' }, { key: 'amount' }, { key: 'payment_method' }, { key: 'received_from' }, { key: 'received_by_name', label: 'Recorded By' }]
 
 const paymentFields = [{ name: 'project_id' }, { name: 'payment_date', default: today() }, { name: 'amount' }, { name: 'payment_type', label: 'Payment Stage', default: 'Upfront' }, { name: 'is_historical', label: 'Historical Payment', default: 0, type: 'checkbox' }, { name: 'financial_account_id' }, { name: 'reference_number' }, { name: 'notes' }, { name: 'payment_method', default: 'Cash', hidden: true }]
 const feeFields = [{ name: 'project_id' }, { name: 'fee_name', default: '' }, { name: 'fee_type', default: 'Hosting' }, { name: 'amount' }, { name: 'billing_cycle', default: 'Yearly' }, { name: 'next_due_date' }, { name: 'reminder_days_before_due', default: 7 }, { name: 'auto_create_reminder', default: 1, type: 'checkbox' }, { name: 'notes' }, { name: 'status', default: 'Not Due', hidden: true }]
-const expenseFields = [{ name: 'project_id' }, { name: 'expense_date', default: today() }, { name: 'expense_category', default: 'Other' }, { name: 'amount' }, { name: 'paid_to' }, { name: 'payment_method', default: 'Cash' }, { name: 'reference_number' }, { name: 'notes' }]
 const receiptFields = [{ name: 'project_id' }, { name: 'payment_id' }, { name: 'receipt_date', default: today() }, { name: 'amount' }, { name: 'payment_method', default: 'Cash', hidden: true }, { name: 'received_from' }, { name: 'notes' }]
 
 export default App

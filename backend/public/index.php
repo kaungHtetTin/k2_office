@@ -413,6 +413,48 @@ function sync_payment_receive(int $paymentId, array $payment, int $userId, strin
     execute_sql('INSERT INTO financial_transactions (transaction_date, transaction_type, to_account_id, amount, notes, project_payment_id, created_by) VALUES (?, "Receive", ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE transaction_date=VALUES(transaction_date), to_account_id=VALUES(to_account_id), amount=VALUES(amount), notes=VALUES(notes), updated_at=CURRENT_TIMESTAMP', [$payment['payment_date'], $payment['financial_account_id'], $payment['amount'], $notes, $paymentId, $userId]);
 }
 
+function sync_expense_use(int $expenseId, array $expense, int $userId): void
+{
+    if (($expense['expense_status'] ?? '') !== 'Paid' || !empty($expense['is_historical'])) {
+        execute_sql('DELETE FROM financial_transactions WHERE expense_id = ? AND domain_billing_period_id IS NULL', [$expenseId]);
+        return;
+    }
+    select_one('SELECT id FROM financial_accounts WHERE id = ? FOR UPDATE', [(int)$expense['financial_account_id']]);
+    $notes = trim('Expense: ' . ($expense['expense_category'] ?? 'Other') . (!empty($expense['paid_to']) ? ' - ' . $expense['paid_to'] : ''));
+    execute_sql('INSERT INTO financial_transactions (transaction_date, transaction_type, from_account_id, amount, notes, expense_id, created_by) VALUES (?, "Use", ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE transaction_date=VALUES(transaction_date), from_account_id=VALUES(from_account_id), amount=VALUES(amount), notes=VALUES(notes), updated_at=CURRENT_TIMESTAMP', [$expense['expense_date'], $expense['financial_account_id'], $expense['amount'], $notes, $expenseId, $userId]);
+}
+
+function expense_analytics(): array
+{
+    $where = [];
+    $params = [];
+    foreach ([['date_from','e.expense_date >= ?'],['date_to','e.expense_date <= ?'],['project_id','e.project_id = ?'],['expense_scope','e.expense_scope = ?'],['expense_category_id','e.expense_category_id = ?'],['financial_account_id','e.financial_account_id = ?'],['expense_status','e.expense_status = ?'],['expense_frequency','e.expense_frequency = ?']] as [$query,$clause]) {
+        if (($_GET[$query] ?? '') !== '') {
+            $where[] = $clause;
+            $params[] = in_array($query, ['project_id','expense_category_id','financial_account_id'], true) ? (int)$_GET[$query] : $_GET[$query];
+        }
+    }
+    $condition = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+    $from = ' FROM expenses e LEFT JOIN expense_categories c ON c.id=e.expense_category_id';
+    $summary = select_one('SELECT COALESCE(SUM(e.amount),0) total_expenses, COALESCE(SUM(IF(e.expense_scope="Project",e.amount,0)),0) project_expenses, COALESCE(SUM(IF(e.expense_scope="Company",e.amount,0)),0) overhead_expenses, COALESCE(SUM(IF(c.category_group="Staff & People",e.amount,0)),0) staff_costs, COALESCE(SUM(IF(c.category_group="Software & Technology",e.amount,0)),0) software_costs, COALESCE(SUM(IF(e.expense_frequency="Recurring",e.amount,0)),0) recurring_costs, COALESCE(SUM(IF(e.expense_frequency="One Time",e.amount,0)),0) one_time_costs, COALESCE(SUM(IF(e.expense_status="Paid",e.amount,0)),0) paid_costs, COALESCE(SUM(IF(e.expense_status IN ("Planned","Unpaid"),e.amount,0)),0) committed_costs' . $from . $condition, $params);
+    $incomeWhere = [];
+    $incomeParams = [];
+    if (!empty($_GET['date_from'])) { $incomeWhere[] = 'payment_date >= ?'; $incomeParams[] = $_GET['date_from']; }
+    if (!empty($_GET['date_to'])) { $incomeWhere[] = 'payment_date <= ?'; $incomeParams[] = $_GET['date_to']; }
+    if (!empty($_GET['project_id'])) { $incomeWhere[] = 'project_id = ?'; $incomeParams[] = (int)$_GET['project_id']; }
+    $income = money(select_one('SELECT COALESCE(SUM(amount),0) total FROM payments' . ($incomeWhere ? ' WHERE ' . implode(' AND ', $incomeWhere) : ''), $incomeParams)['total']);
+    $summary['this_month_expenses'] = money(select_one('SELECT COALESCE(SUM(amount),0) total FROM expenses WHERE expense_date BETWEEN ? AND ?', [date('Y-m-01'), date('Y-m-t')])['total']);
+    $summary['total_income'] = $income;
+    $summary['company_net_profit'] = money($income - (float)$summary['total_expenses']);
+    return [
+        'summary' => $summary,
+        'by_category' => select_all('SELECT COALESCE(c.name,e.expense_category) name, COALESCE(c.category_group,"Other") category_group, SUM(e.amount) total, COUNT(*) expense_count' . $from . $condition . ' GROUP BY COALESCE(c.name,e.expense_category), c.category_group ORDER BY total DESC', $params),
+        'by_month' => select_all('SELECT DATE_FORMAT(e.expense_date,"%Y-%m") month, SUM(e.amount) total' . $from . $condition . ' GROUP BY month ORDER BY month', $params),
+        'by_vendor' => select_all('SELECT COALESCE(NULLIF(e.paid_to,""),"Not specified") name, SUM(e.amount) total, COUNT(*) expense_count' . $from . $condition . ' GROUP BY name ORDER BY total DESC LIMIT 10', $params),
+        'by_account' => select_all('SELECT COALESCE(fa.name,IF(e.is_historical=1,"Historical / no balance movement","Not paid")) name, SUM(e.amount) total' . $from . ' LEFT JOIN financial_accounts fa ON fa.id=e.financial_account_id' . $condition . ' GROUP BY name ORDER BY total DESC', $params),
+    ];
+}
+
 function normalize_project_dates(array $data): array
 {
     if (!empty($data['domain_purchase_date']) && empty($data['domain_reminder_date'])) {
@@ -721,9 +763,26 @@ function validate_resource_data(string $resource, array $data, array $requiredFi
         }
     }
     if ($resource === 'expenses') {
-        one_of($errors, $data, 'expense_category', ['Domain Purchase','Hosting Purchase','VPS Purchase','Server Cost','SSL Cost','API Cost','SMS Cost','Developer Cost','Design Cost','Transport','Other']);
+        one_of($errors, $data, 'expense_scope', ['Project','Company']);
+        one_of($errors, $data, 'expense_status', ['Planned','Unpaid','Paid']);
+        one_of($errors, $data, 'expense_frequency', ['One Time','Recurring']);
+        if (!empty($data['billing_cycle'])) one_of($errors, $data, 'billing_cycle', ['Monthly','Quarterly','Half Yearly','Yearly','Other']);
         one_of($errors, $data, 'payment_method', ['Cash','KPay','WavePay','Bank Transfer','AYA Pay','CB Pay','Other']);
+        if (($data['expense_scope'] ?? '') === 'Project' && empty($data['project_id'])) $errors['project_id'] = 'Choose the related project.';
+        if (($data['expense_scope'] ?? '') === 'Company') $data['project_id'] = null;
+        $category = !empty($data['expense_category_id']) ? select_one('SELECT id, name, status FROM expense_categories WHERE id=?', [(int)$data['expense_category_id']]) : null;
+        if (!$category || ($category['status'] !== 'Active' && empty($data['id']))) $errors['expense_category_id'] = 'Choose an active expense category.';
+        if (($data['expense_frequency'] ?? '') === 'Recurring' && empty($data['billing_cycle'])) $errors['billing_cycle'] = 'Choose the recurring billing cycle.';
+        if (!in_array((string)($data['is_historical'] ?? '0'), ['0','1'], true)) $errors['is_historical'] = 'Choose whether this is historical.';
+        if (($data['expense_status'] ?? '') === 'Paid' && empty($data['is_historical']) && empty($data['financial_account_id'])) $errors['financial_account_id'] = 'Choose the account used to pay this expense.';
+        if (!empty($data['financial_account_id'])) {
+            $account = select_one('SELECT id, status FROM financial_accounts WHERE id=?', [(int)$data['financial_account_id']]);
+            $existingAccountId = !empty($data['id']) ? (int)(select_one('SELECT financial_account_id FROM expenses WHERE id=?', [(int)$data['id']])['financial_account_id'] ?? 0) : 0;
+            if (!$account || ($account['status'] !== 'Active' && (int)$account['id'] !== $existingAccountId)) $errors['financial_account_id'] = 'Choose an active financial account.';
+        }
         max_length($errors, $data, 'paid_to', 255);
+        max_length($errors, $data, 'subcategory', 100);
+        max_length($errors, $data, 'billing_period', 50);
         max_length($errors, $data, 'reference_number', 150);
     }
     $dateFields = ['payments' => ['payment_date'], 'expenses' => ['expense_date'], 'recurring-fees' => ['last_paid_date','next_due_date'], 'invoices' => ['invoice_date','due_date'], 'receipts' => ['receipt_date']];
@@ -998,11 +1057,13 @@ try {
                 $renewalReminder = (new DateTimeImmutable($coverageEnd))->modify("-{$reminderDays} days")->format('Y-m-d');
                 $periodLabel = trim((string)$billing['period_label']) ?: substr($coverageStart, 0, 4) . '-' . substr($customerRenewal, 0, 4);
                 execute_sql('UPDATE domain_billing_periods SET period_label=?, purchase_status="Purchased", purchase_date=?, coverage_start_date=?, coverage_end_date=?, customer_renewal_date=?, renewal_reminder_date=?, actual_registrar_cost=?, is_historical_purchase=?, is_registrar_carryover=0, paid_from_account_id=?, registrar_provider=?, registrar_reference=? WHERE id=?', [$periodLabel,$data['purchase_date'],$coverageStart,$coverageEnd,$customerRenewal,$renewalReminder,money($data['actual_registrar_cost']),$data['is_historical_purchase'],$data['financial_account_id'] ? (int)$data['financial_account_id'] : null,$data['registrar_provider'] ?? null,$data['registrar_reference'] ?? null,$id]);
-                execute_sql('INSERT INTO expenses (project_id,expense_date,expense_category,amount,paid_to,payment_method,reference_number,domain_billing_period_id,notes,created_by) VALUES (?, ?, "Domain Purchase", ?, ?, "Other", ?, ?, ?, ?) ON DUPLICATE KEY UPDATE project_id=VALUES(project_id), expense_date=VALUES(expense_date), amount=VALUES(amount), paid_to=VALUES(paid_to), reference_number=VALUES(reference_number), notes=VALUES(notes), updated_at=CURRENT_TIMESTAMP', [$billing['project_id'],$data['purchase_date'],money($data['actual_registrar_cost']),$data['registrar_provider'] ?? 'Domain registrar',$data['registrar_reference'] ?? null,$id,'Registrar purchase for domain billing period',$user['sub']]);
+                $domainCategoryId = select_one('SELECT id FROM expense_categories WHERE name="Domain Purchase"')['id'] ?? null;
+                execute_sql('INSERT INTO expenses (project_id,expense_date,expense_scope,expense_category_id,expense_category,amount,paid_to,payment_method,financial_account_id,expense_status,expense_frequency,is_historical,reference_number,domain_billing_period_id,notes,created_by) VALUES (?, ?, "Project", ?, "Domain Purchase", ?, ?, "Other", ?, "Paid", "One Time", ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE project_id=VALUES(project_id), expense_date=VALUES(expense_date), expense_category_id=VALUES(expense_category_id), amount=VALUES(amount), paid_to=VALUES(paid_to), financial_account_id=VALUES(financial_account_id), is_historical=VALUES(is_historical), reference_number=VALUES(reference_number), notes=VALUES(notes), updated_at=CURRENT_TIMESTAMP', [$billing['project_id'],$data['purchase_date'],$domainCategoryId,money($data['actual_registrar_cost']),$data['registrar_provider'] ?? 'Domain registrar',$data['financial_account_id'] ? (int)$data['financial_account_id'] : null,$data['is_historical_purchase'],$data['registrar_reference'] ?? null,$id,'Registrar purchase for domain billing period',$user['sub']]);
+                $expenseId = (int)(select_one('SELECT id FROM expenses WHERE domain_billing_period_id=?', [$id])['id'] ?? 0);
                 if ($data['is_historical_purchase']) {
                     execute_sql('DELETE FROM financial_transactions WHERE domain_billing_period_id=?', [$id]);
                 } else {
-                    execute_sql('INSERT INTO financial_transactions (transaction_date,transaction_type,from_account_id,amount,notes,domain_billing_period_id,created_by) VALUES (?, "Use", ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE transaction_date=VALUES(transaction_date), from_account_id=VALUES(from_account_id), amount=VALUES(amount), notes=VALUES(notes), updated_at=CURRENT_TIMESTAMP', [$data['purchase_date'],(int)$data['financial_account_id'],money($data['actual_registrar_cost']),'Domain registrar purchase',$id,$user['sub']]);
+                    execute_sql('INSERT INTO financial_transactions (transaction_date,transaction_type,from_account_id,amount,notes,domain_billing_period_id,expense_id,created_by) VALUES (?, "Use", ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE transaction_date=VALUES(transaction_date), from_account_id=VALUES(from_account_id), amount=VALUES(amount), expense_id=VALUES(expense_id), notes=VALUES(notes), updated_at=CURRENT_TIMESTAMP', [$data['purchase_date'],(int)$data['financial_account_id'],money($data['actual_registrar_cost']),'Domain registrar purchase',$id,$expenseId,$user['sub']]);
                 }
                 audit_log((int)$user['sub'], empty($billing['purchase_date']) ? 'purchase' : 'update-purchase', 'domain-billings', $id, 'Recorded domain registrar purchase');
                 $pdo->commit();
@@ -1116,8 +1177,40 @@ try {
         json_response(false, 'Route not found', null, [], 404);
     }
 
+    if ($resource === 'expense-categories') {
+        if ($method === 'GET') {
+            $where = empty($_GET['all']) ? ' WHERE status="Active"' : '';
+            json_response(true, 'Expense categories', select_all('SELECT * FROM expense_categories' . $where . ' ORDER BY category_group, sort_order, name'));
+        }
+        require_admin($user);
+        if ($method === 'POST' || ($method === 'PUT' && $id)) {
+            if ($method === 'PUT' && !record_exists('expense_categories', $id)) json_response(false, 'Expense category not found', null, [], 404);
+            $data = input();
+            $data['name'] = trim((string)($data['name'] ?? ''));
+            $errors = required($data, ['name','category_group','status']);
+            one_of($errors, $data, 'category_group', ['Staff & People','Software & Technology','Office & Operations','Business Administration','Other']);
+            one_of($errors, $data, 'status', ['Active','Inactive']);
+            if (mb_strlen($data['name']) > 100) $errors['name'] = 'Name must be 100 characters or fewer.';
+            if ($data['name'] !== '' && select_one('SELECT id FROM expense_categories WHERE name=? AND id<>?', [$data['name'], $id ?? 0])) $errors['name'] = 'This category already exists.';
+            if ($errors) json_response(false, 'Validation failed', null, $errors, 422);
+            $categoryId = insert_or_update('expense_categories', $data, ['name','category_group','status','sort_order'], $method === 'PUT' ? $id : null);
+            if ($method === 'PUT') execute_sql('UPDATE expenses SET expense_category=? WHERE expense_category_id=?', [$data['name'], $categoryId]);
+            audit_log((int)$user['sub'], $method === 'POST' ? 'create' : 'update', 'expense-categories', $categoryId, 'Managed expense category');
+            json_response(true, 'Expense category saved', ['id' => $categoryId], [], $method === 'POST' ? 201 : 200);
+        }
+        if ($method === 'DELETE' && $id) {
+            if (!record_exists('expense_categories', $id)) json_response(false, 'Expense category not found', null, [], 404);
+            $usage = (int)(select_one('SELECT COUNT(*) total FROM expenses WHERE expense_category_id=?', [$id])['total'] ?? 0);
+            if ($usage) json_response(false, 'This category has expense history. Set it to Inactive instead.', null, [], 422);
+            execute_sql('DELETE FROM expense_categories WHERE id=?', [$id]);
+            audit_log((int)$user['sub'], 'delete', 'expense-categories', $id, 'Deleted unused expense category');
+            json_response(true, 'Expense category deleted');
+        }
+        json_response(false, 'Route not found', null, [], 404);
+    }
+
     if ($resource === 'financial-transactions') {
-        $baseSql = 'SELECT ft.*, fa.name from_account_name, ta.name to_account_name, COALESCE(p.project_name, dp.project_name) project_name, COALESCE(pay.project_id, d.project_id) project_id, d.domain_name, d.period_label domain_period_label FROM financial_transactions ft LEFT JOIN financial_accounts fa ON fa.id=ft.from_account_id LEFT JOIN financial_accounts ta ON ta.id=ft.to_account_id LEFT JOIN payments pay ON pay.id=ft.project_payment_id LEFT JOIN projects p ON p.id=pay.project_id LEFT JOIN domain_billing_periods d ON d.id=ft.domain_billing_period_id LEFT JOIN projects dp ON dp.id=d.project_id';
+        $baseSql = 'SELECT ft.*, fa.name from_account_name, ta.name to_account_name, COALESCE(p.project_name, dp.project_name, ep.project_name) project_name, COALESCE(pay.project_id, d.project_id, e.project_id) project_id, d.domain_name, d.period_label domain_period_label, e.expense_category, e.paid_to expense_payee, CASE WHEN ft.expense_id IS NOT NULL THEN "Expense" WHEN ft.project_payment_id IS NOT NULL THEN "Payment" WHEN ft.domain_billing_period_id IS NOT NULL THEN "Domain" ELSE "Manual" END source_type FROM financial_transactions ft LEFT JOIN financial_accounts fa ON fa.id=ft.from_account_id LEFT JOIN financial_accounts ta ON ta.id=ft.to_account_id LEFT JOIN payments pay ON pay.id=ft.project_payment_id LEFT JOIN projects p ON p.id=pay.project_id LEFT JOIN domain_billing_periods d ON d.id=ft.domain_billing_period_id LEFT JOIN projects dp ON dp.id=d.project_id LEFT JOIN expenses e ON e.id=ft.expense_id LEFT JOIN projects ep ON ep.id=e.project_id';
         if ($method === 'GET' && !$id) {
             $where = [];
             $params = [];
@@ -1138,9 +1231,14 @@ try {
             $existingTransaction = $method === 'PUT' ? select_one('SELECT * FROM financial_transactions WHERE id = ?', [$id]) : null;
             if ($method === 'PUT' && !$existingTransaction) json_response(false, 'Financial transaction not found', null, [], 404);
             if (!empty($existingTransaction['domain_billing_period_id'])) json_response(false, 'Registrar purchase transactions are managed from Domain Billing.', null, [], 422);
+            if (!empty($existingTransaction['expense_id'])) json_response(false, 'Expense transactions are managed from Expenses.', null, [], 422);
             $data = input();
             $errors = required($data, ['transaction_date','transaction_type','amount','from_account_id']);
             one_of($errors, $data, 'transaction_type', ['Use','Transfer']);
+            if (($data['transaction_type'] ?? '') === 'Use') {
+                if (empty($data['manual_use_type'])) $errors['manual_use_type'] = 'Choose the reason for this non-expense use.';
+                one_of($errors, $data, 'manual_use_type', ['Owner Withdrawal','Cash Adjustment','Loan Repayment','Non-expense Balance Correction','Other']);
+            } else $data['manual_use_type'] = null;
             valid_date($errors, $data, 'transaction_date');
             valid_decimal($errors, $data, 'amount');
             max_length($errors, $data, 'notes', 500);
@@ -1163,7 +1261,7 @@ try {
                 $marks = implode(',', array_fill(0, count($accountIds), '?'));
                 select_all("SELECT id FROM financial_accounts WHERE id IN ({$marks}) ORDER BY id FOR UPDATE", $accountIds);
                 $data['created_by'] = $user['sub'];
-                $transactionId = insert_or_update('financial_transactions', $data, ['transaction_date','transaction_type','from_account_id','to_account_id','amount','notes','created_by'], $method === 'PUT' ? $id : null);
+                $transactionId = insert_or_update('financial_transactions', $data, ['transaction_date','transaction_type','from_account_id','to_account_id','amount','manual_use_type','notes','created_by'], $method === 'PUT' ? $id : null);
                 audit_log((int)$user['sub'], $method === 'POST' ? 'create' : 'update', 'financial-transactions', $transactionId, ($method === 'POST' ? 'Created ' : 'Updated ') . strtolower($data['transaction_type']) . ' transaction');
                 $pdo->commit();
                 json_response(true, $method === 'POST' ? 'Transaction created' : 'Transaction updated', ['id' => $transactionId], [], $method === 'POST' ? 201 : 200);
@@ -1173,10 +1271,11 @@ try {
             }
         }
         if ($method === 'DELETE' && $id) {
-            $row = select_one('SELECT project_payment_id, domain_billing_period_id FROM financial_transactions WHERE id=?', [$id]);
+            $row = select_one('SELECT project_payment_id, domain_billing_period_id, expense_id FROM financial_transactions WHERE id=?', [$id]);
             if (!$row) json_response(false, 'Financial transaction not found', null, [], 404);
             if (!empty($row['project_payment_id'])) json_response(false, 'Delete the linked project payment instead', null, [], 422);
             if (!empty($row['domain_billing_period_id'])) json_response(false, 'Registrar purchase transactions are managed from Domain Billing.', null, [], 422);
+            if (!empty($row['expense_id'])) json_response(false, 'Expense transactions are managed from Expenses.', null, [], 422);
             execute_sql('DELETE FROM financial_transactions WHERE id=?', [$id]);
             audit_log((int)$user['sub'], 'delete', 'financial-transactions', $id, 'Deleted financial transaction');
             json_response(true, 'Transaction deleted');
@@ -1271,7 +1370,7 @@ try {
 
     $crud = [
         'payments' => ['table' => 'payments', 'fields' => ['project_id','payment_date','amount','payment_type','payment_method','payment_scope','domain_billing_period_id','is_historical','financial_account_id','reference_number','received_by','notes'], 'required' => ['project_id','payment_date','amount','payment_type','payment_method'], 'list' => 'SELECT pay.*, p.project_code, p.project_name, p.customer_company_name, u.name recorded_by_name, fa.name financial_account_name, d.domain_name, d.period_label domain_period_label FROM payments pay JOIN projects p ON p.id = pay.project_id LEFT JOIN financial_accounts fa ON fa.id = pay.financial_account_id LEFT JOIN users u ON u.id = pay.received_by LEFT JOIN domain_billing_periods d ON d.id=pay.domain_billing_period_id', 'one' => 'SELECT pay.*, p.project_code, p.project_name, p.customer_company_name, u.name recorded_by_name, fa.name financial_account_name, d.domain_name, d.period_label domain_period_label FROM payments pay JOIN projects p ON p.id = pay.project_id LEFT JOIN financial_accounts fa ON fa.id = pay.financial_account_id LEFT JOIN users u ON u.id = pay.received_by LEFT JOIN domain_billing_periods d ON d.id=pay.domain_billing_period_id WHERE pay.id = ?'],
-        'expenses' => ['table' => 'expenses', 'fields' => ['project_id','expense_date','expense_category','amount','paid_to','payment_method','reference_number','domain_billing_period_id','notes','created_by'], 'required' => ['project_id','expense_date','expense_category','amount'], 'list' => 'SELECT e.*, p.project_code, p.project_name, p.customer_company_name, u.name created_by_name, d.domain_name, d.period_label domain_period_label FROM expenses e JOIN projects p ON p.id = e.project_id LEFT JOIN users u ON u.id = e.created_by LEFT JOIN domain_billing_periods d ON d.id=e.domain_billing_period_id', 'one' => 'SELECT e.*, p.project_code, p.project_name, p.customer_company_name, u.name created_by_name, d.domain_name, d.period_label domain_period_label FROM expenses e JOIN projects p ON p.id = e.project_id LEFT JOIN users u ON u.id = e.created_by LEFT JOIN domain_billing_periods d ON d.id=e.domain_billing_period_id WHERE e.id = ?'],
+        'expenses' => ['table' => 'expenses', 'fields' => ['project_id','expense_date','expense_scope','expense_category_id','expense_category','subcategory','amount','paid_to','payment_method','financial_account_id','expense_status','expense_frequency','billing_cycle','billing_period','is_historical','reference_number','domain_billing_period_id','notes','created_by'], 'required' => ['expense_date','expense_scope','expense_category_id','amount','expense_status','expense_frequency'], 'list' => 'SELECT e.*, p.project_code, p.project_name, p.customer_company_name, u.name created_by_name, d.domain_name, d.period_label domain_period_label, c.category_group, fa.name financial_account_name FROM expenses e LEFT JOIN projects p ON p.id = e.project_id LEFT JOIN users u ON u.id = e.created_by LEFT JOIN domain_billing_periods d ON d.id=e.domain_billing_period_id LEFT JOIN expense_categories c ON c.id=e.expense_category_id LEFT JOIN financial_accounts fa ON fa.id=e.financial_account_id', 'one' => 'SELECT e.*, p.project_code, p.project_name, p.customer_company_name, u.name created_by_name, d.domain_name, d.period_label domain_period_label, c.category_group, fa.name financial_account_name FROM expenses e LEFT JOIN projects p ON p.id = e.project_id LEFT JOIN users u ON u.id = e.created_by LEFT JOIN domain_billing_periods d ON d.id=e.domain_billing_period_id LEFT JOIN expense_categories c ON c.id=e.expense_category_id LEFT JOIN financial_accounts fa ON fa.id=e.financial_account_id WHERE e.id = ?'],
         'recurring-fees' => ['table' => 'recurring_fees', 'fields' => ['project_id','fee_name','fee_type','amount','billing_cycle','last_paid_date','next_due_date','reminder_days_before_due','status','auto_create_reminder','notes'], 'required' => ['project_id','fee_name','fee_type','amount','billing_cycle','next_due_date'], 'list' => recurring_fee_list_sql(), 'one' => 'SELECT r.*, r.id source_id, 0 is_read_only, p.project_code, p.project_name, p.customer_company_name FROM recurring_fees r JOIN projects p ON p.id = r.project_id WHERE r.id = ?'],
         'invoices' => ['table' => 'invoices', 'fields' => ['invoice_number','project_id','invoice_date','due_date','invoice_type','subtotal','discount_amount','tax_amount','total_amount','paid_amount','balance_amount','project_total_amount','previously_paid_amount','remaining_project_amount','status','header_note','notes','created_by'], 'required' => ['project_id','invoice_date','invoice_type','project_total_amount','previously_paid_amount','total_amount','remaining_project_amount'], 'list' => 'SELECT i.*, p.project_code, p.project_name, p.customer_company_name FROM invoices i JOIN projects p ON p.id = i.project_id ORDER BY i.invoice_date DESC, i.id DESC', 'one' => 'SELECT i.*, p.project_code, p.project_name, p.customer_company_name, p.contact_person, p.contact_phone, p.contact_email, p.customer_address, p.currency FROM invoices i JOIN projects p ON p.id = i.project_id WHERE i.id = ?'],
         'receipts' => ['table' => 'receipts', 'fields' => ['receipt_number','project_id','payment_id','receipt_date','amount','payment_method','received_from','received_by','notes'], 'required' => ['project_id','payment_id','receipt_date','amount'], 'list' => 'SELECT r.*, p.project_code, p.project_name, p.customer_company_name, u.name received_by_name FROM receipts r JOIN projects p ON p.id = r.project_id LEFT JOIN users u ON u.id = r.received_by ORDER BY r.receipt_date DESC, r.id DESC', 'one' => 'SELECT r.*, p.project_code, p.project_name, p.customer_company_name, p.contact_phone, pay.reference_number, u.name received_by_name FROM receipts r JOIN projects p ON p.id = r.project_id JOIN payments pay ON pay.id = r.payment_id LEFT JOIN users u ON u.id = r.received_by WHERE r.id = ?'],
@@ -1329,7 +1428,7 @@ try {
             }
             $filterMap = match ($resource) {
                 'payments' => ['project_id' => 'project_id', 'financial_account_id' => 'financial_account_id'],
-                'expenses' => ['project_id' => 'project_id', 'expense_category' => 'expense_category', 'payment_method' => 'payment_method'],
+                'expenses' => ['project_id' => 'project_id', 'expense_category_id' => 'expense_category_id', 'expense_scope' => 'expense_scope', 'expense_status' => 'expense_status', 'expense_frequency' => 'expense_frequency', 'financial_account_id' => 'financial_account_id', 'payment_method' => 'payment_method'],
                 'recurring-fees' => ['project_id' => 'project_id', 'fee_type' => 'fee_type', 'source_type' => 'source_type', 'status' => 'effective_status'],
                 'invoices' => ['project_id' => 'project_id', 'invoice_type' => 'invoice_type', 'status' => 'status'],
                 'receipts' => ['project_id' => 'project_id', 'payment_method' => 'payment_method'],
@@ -1337,7 +1436,7 @@ try {
             };
             $searchColumns = match ($resource) {
                 'payments' => ['project_code','project_name','customer_company_name','financial_account_name','reference_number'],
-                'expenses' => ['project_code','project_name','customer_company_name','paid_to','reference_number'],
+                'expenses' => ['project_code','project_name','customer_company_name','expense_category','subcategory','paid_to','reference_number'],
                 'recurring-fees' => ['project_code','project_name','customer_company_name','fee_name','fee_type'],
                 'invoices' => ['invoice_number','project_code','project_name','customer_company_name'],
                 'receipts' => ['receipt_number','project_code','project_name','customer_company_name','received_from'],
@@ -1392,6 +1491,16 @@ try {
                     $data['domain_billing_period_id'] = null;
                 }
             }
+            if ($resource === 'expenses') {
+                $historicalValue = $data['is_historical'] ?? 0;
+                $data['is_historical'] = in_array($historicalValue, [1,'1',true], true) ? 1 : 0;
+                if (($data['expense_scope'] ?? '') === 'Company') $data['project_id'] = null;
+                if (($data['expense_status'] ?? '') !== 'Paid') $data['financial_account_id'] = null;
+                if ($data['is_historical']) $data['financial_account_id'] = null;
+                if (($data['expense_frequency'] ?? '') === 'One Time') $data['billing_cycle'] = null;
+                $category = !empty($data['expense_category_id']) ? select_one('SELECT name FROM expense_categories WHERE id=?', [(int)$data['expense_category_id']]) : null;
+                $data['expense_category'] = $category['name'] ?? '';
+            }
             if (in_array($resource, ['expenses','invoices'], true)) $data['created_by'] = $user['sub'];
             if ($resource === 'receipts') $data['received_by'] = $user['sub'];
             $errors = validate_resource_data($resource, $data, $def['required']);
@@ -1432,6 +1541,7 @@ try {
                     $receiveNotes = $data['payment_scope'] === 'Domain' ? 'Customer domain payment' : ($data['payment_scope'] === 'Recurring' ? 'Customer recurring-fee payment' : 'Project payment');
                     sync_payment_receive($newId, $data, (int)$user['sub'], $receiveNotes);
                 }
+                if ($resource === 'expenses') sync_expense_use($newId, $data, (int)$user['sub']);
                 if ($resource === 'invoices') {
                     execute_sql('DELETE FROM invoice_items WHERE invoice_id = ?', [$newId]);
                     foreach (($data['items'] ?? []) as $item) {
@@ -1503,13 +1613,15 @@ try {
     if ($resource === 'reports') {
         $kind = $parts[1] ?? 'project-financial';
         if ($kind === 'financial-overview') json_response(true, 'Financial overview', financial_overview());
-        $allowedReports = ['project-financial','payment-collection','outstanding-balance','expense','profit','recurring-fees','domain-billing','invoice','monthly-income-expense'];
+        $allowedReports = ['project-financial','payment-collection','outstanding-balance','expense','expense-analytics','profit','recurring-fees','domain-billing','invoice','monthly-income-expense'];
         if (!in_array($kind, $allowedReports, true)) json_response(false, 'Report not found', null, [], 404);
-        if ($kind !== 'monthly-income-expense') {
+        if (!in_array($kind, ['monthly-income-expense','expense-analytics'], true)) {
             $_GET['page'] = max(1, (int)($_GET['page'] ?? 1));
             $_GET['limit'] = min(500, max(1, (int)($_GET['limit'] ?? 100)));
         }
-        if (in_array($kind, ['project-financial','outstanding-balance','profit'], true)) {
+        if ($kind === 'expense-analytics') {
+            $data = expense_analytics();
+        } elseif (in_array($kind, ['project-financial','outstanding-balance','profit'], true)) {
             if ($kind === 'outstanding-balance') $_GET['outstanding_only'] = '1';
             $data = project_list();
         } elseif ($kind === 'monthly-income-expense') {
@@ -1542,7 +1654,7 @@ try {
             $source = match ($kind) { 'payment-collection' => 'payments', 'expense' => 'expenses', 'recurring-fees' => 'recurring-fees', default => 'invoices' };
             $reportFilterMap = match ($source) {
                 'payments' => ['project_id' => 'project_id', 'financial_account_id' => 'financial_account_id'],
-                'expenses' => ['project_id' => 'project_id', 'expense_category' => 'expense_category', 'payment_method' => 'payment_method'],
+                'expenses' => ['project_id' => 'project_id', 'expense_category_id' => 'expense_category_id', 'expense_scope' => 'expense_scope', 'expense_status' => 'expense_status', 'expense_frequency' => 'expense_frequency', 'financial_account_id' => 'financial_account_id', 'payment_method' => 'payment_method'],
                 'recurring-fees' => ['project_id' => 'project_id', 'fee_type' => 'fee_type', 'status' => 'effective_status'],
                 default => ['project_id' => 'project_id', 'invoice_type' => 'invoice_type', 'status' => 'status'],
             };

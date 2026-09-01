@@ -1,6 +1,6 @@
 # KSSPM Version 1
 
-KSSPM is a project-centered financial management app for a small software development company. Version 1.7 includes project-owner contacts, separate annual customer and multi-year registrar domain schedules, unified recurring-fee tracking, historical imports, period-based collection reports, project-linked A4 invoices, and user-defined financial account balances.
+KSSPM is a project and company financial management app for a small software development company. It includes project-owner contacts, domain and recurring-fee schedules, historical imports, customizable installment invoices, managed expense categories, company overhead tracking, expense analytics, and user-defined financial account balances.
 
 ## Stack
 
@@ -36,7 +36,7 @@ Login sessions are browser-session-only by default. Selecting **Remember me on t
 
 ### Upgrade an Existing Version 1 Database
 
-Back up important data, then import migrations from `database/migrate_v1_1.sql` through `database/migrate_v1_11_manual_invoice_amounts.sql` in filename order. These idempotent migrations keep existing financial history, add the Version 1 features and performance indexes, remove obsolete Project Generated recurring rows, and add customizable installment invoices. Do not re-import `schema.sql` over a database containing real data because the fresh-install script recreates all tables.
+Back up important data, then import migrations from `database/migrate_v1_1.sql` through `database/migrate_v1_12_company_financial.sql` in version order. These idempotent migrations preserve existing financial history, add the Version 1 features and performance indexes, remove obsolete Project Generated recurring rows, add customizable installment invoices, and upgrade expenses into the company-wide cost ledger. Do not re-import `schema.sql` over a database containing real data because the fresh-install script recreates all tables.
 
 In phpMyAdmin, select the existing `ksspm` database before importing each migration in filename order.
 
@@ -83,6 +83,10 @@ VITE_API_BASE_URL=http://localhost:8000
 - `PUT|DELETE /financial-accounts/{id}`
 - `GET|POST /financial-transactions`
 - `GET|PUT|DELETE /financial-transactions/{id}`
+- `GET|POST /expenses`
+- `GET|PUT|DELETE /expenses/{id}`
+- `GET|POST /expense-categories`
+- `PUT|DELETE /expense-categories/{id}`
 - `GET|POST /recurring-fees`
 - `POST /recurring-fees/{id}/mark-paid`
 - `GET|POST /expenses`
@@ -94,6 +98,7 @@ VITE_API_BASE_URL=http://localhost:8000
 - `POST /reminders/resolve`
 - `GET /reports/{report-name}`
 - `GET /reports/financial-overview?period=today|week|month|lifetime&project_id=&fee_type=`
+- `GET /reports/expense-analytics?date_from=&date_to=&project_id=&expense_scope=&expense_category_id=&financial_account_id=`
 
 All protected endpoints require `Authorization: Bearer <token>`.
 
@@ -101,11 +106,12 @@ All protected endpoints require `Authorization: Bearer <token>`.
 
 - Customer/company data is stored directly on each project.
 - Project financial totals are calculated dynamically from payments and expenses.
-- Recording a current project payment requires a Received By account and automatically creates the matching User Financial Receive row; no second entry is needed.
+- Recording a current project payment requires a receiving account and automatically creates the matching Company Financial Receive row; no second entry is needed.
 - Mark an old payment Historical to include it in paid totals and status without adding it to any current financial account. Use one historical Final Payment for an old fully paid contract, or historical Upfront/Progress payments for partial history.
 - Historical customer domain payments work the same way: they settle the annual customer domain price without changing financial account balances.
-- User Financial manually records only Use and Transfer movements. Admins manage user-defined account names, opening balances, and statuses without account types or payment methods.
-- A fresh installation starts without financial accounts. An Admin creates the required names from **User Financial > Add Account** before recording the first payment.
+- Paid expenses automatically create one linked Company Financial Use movement. Editing or deleting the expense updates or reverses that movement; planned, unpaid, and historical expenses do not change account balances.
+- Company Financial manually records only transfers and explicit non-expense uses such as owner withdrawals, cash adjustments, loan repayments, and balance corrections.
+- A fresh installation starts without financial accounts. An Admin creates the required names from **Company Financial > Add Account** before recording the first payment or paid expense.
 - Viewer users can read but cannot create, update, or delete.
 - Staff users can manage daily records but cannot manage users or settings.
 - Invoices can be saved as A4 PDF softcopies through the browser PDF dialog. Receipt records do not have print or document-generation actions.
@@ -165,5 +171,5 @@ Get-Content -Raw ksspm-backup.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
 - If phpMyAdmin does not show `ksspm`, confirm MySQL is running and import `database/schema.sql` from phpMyAdmin's top-level Import screen.
 - If the frontend reports a network error, open `http://localhost/ksspm/backend/public/auth/login`; a GET response such as an authentication or route error confirms Apache can reach PHP.
 - If API requests return `Database connection failed`, verify the database name and credentials in `backend/config/database.php` or the `DB_*` environment variables.
-- If a migrated database reports a missing column, table, or performance index, select `ksspm` and re-run all idempotent migrations through `database/migrate_v1_11_manual_invoice_amounts.sql` in filename order.
+- If a migrated database reports a missing column, table, or performance index, select `ksspm` and re-run all idempotent migrations through `database/migrate_v1_12_company_financial.sql` in version order.
 - If port 5173 is occupied, Vite chooses another port; use the URL printed by `npm run dev`.

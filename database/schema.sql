@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS receipts;
 DROP TABLE IF EXISTS invoice_items;
 DROP TABLE IF EXISTS invoices;
 DROP TABLE IF EXISTS expenses;
+DROP TABLE IF EXISTS expense_categories;
 DROP TABLE IF EXISTS recurring_fees;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS domain_billing_periods;
@@ -169,14 +170,33 @@ CREATE TABLE recurring_fees (
     UNIQUE KEY uq_recurring_project_source (project_id, source_key)
 );
 
+CREATE TABLE expense_categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    category_group ENUM('Staff & People', 'Software & Technology', 'Office & Operations', 'Business Administration', 'Other') NOT NULL DEFAULT 'Other',
+    status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE expenses (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT NOT NULL,
+    project_id INT,
     expense_date DATE NOT NULL,
-    expense_category ENUM('Domain Purchase', 'Hosting Purchase', 'VPS Purchase', 'Server Cost', 'SSL Cost', 'API Cost', 'SMS Cost', 'Developer Cost', 'Design Cost', 'Transport', 'Other') NOT NULL,
+    expense_scope ENUM('Project', 'Company') NOT NULL DEFAULT 'Project',
+    expense_category_id INT,
+    expense_category VARCHAR(100) NOT NULL,
+    subcategory VARCHAR(100),
     amount DECIMAL(15,2) NOT NULL,
     paid_to VARCHAR(255),
     payment_method ENUM('Cash', 'KPay', 'WavePay', 'Bank Transfer', 'AYA Pay', 'CB Pay', 'Other') DEFAULT 'Cash',
+    financial_account_id INT,
+    expense_status ENUM('Planned', 'Unpaid', 'Paid') NOT NULL DEFAULT 'Paid',
+    expense_frequency ENUM('One Time', 'Recurring') NOT NULL DEFAULT 'One Time',
+    billing_cycle ENUM('Monthly', 'Quarterly', 'Half Yearly', 'Yearly', 'Other'),
+    billing_period VARCHAR(50),
+    is_historical TINYINT(1) NOT NULL DEFAULT 0,
     reference_number VARCHAR(150),
     domain_billing_period_id INT UNIQUE,
     notes TEXT,
@@ -184,6 +204,8 @@ CREATE TABLE expenses (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (expense_category_id) REFERENCES expense_categories(id),
+    FOREIGN KEY (financial_account_id) REFERENCES financial_accounts(id),
     FOREIGN KEY (domain_billing_period_id) REFERENCES domain_billing_periods(id) ON DELETE SET NULL,
     FOREIGN KEY (created_by) REFERENCES users(id)
 );
@@ -264,6 +286,8 @@ CREATE TABLE financial_transactions (
     notes VARCHAR(500),
     project_payment_id INT UNIQUE,
     domain_billing_period_id INT UNIQUE,
+    expense_id INT UNIQUE,
+    manual_use_type ENUM('Owner Withdrawal', 'Cash Adjustment', 'Loan Repayment', 'Non-expense Balance Correction', 'Other'),
     created_by INT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -271,6 +295,7 @@ CREATE TABLE financial_transactions (
     FOREIGN KEY (to_account_id) REFERENCES financial_accounts(id),
     FOREIGN KEY (project_payment_id) REFERENCES payments(id) ON DELETE CASCADE,
     FOREIGN KEY (domain_billing_period_id) REFERENCES domain_billing_periods(id) ON DELETE CASCADE,
+    FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
@@ -313,6 +338,9 @@ CREATE INDEX idx_payments_account_date ON payments(financial_account_id, payment
 CREATE INDEX idx_payments_domain_date ON payments(domain_billing_period_id, payment_date);
 CREATE INDEX idx_expenses_project_date ON expenses(project_id, expense_date);
 CREATE INDEX idx_expenses_date_id ON expenses(expense_date, id);
+CREATE INDEX idx_expenses_scope_date ON expenses(expense_scope, expense_date);
+CREATE INDEX idx_expenses_category_date ON expenses(expense_category_id, expense_date);
+CREATE INDEX idx_expenses_account_date ON expenses(financial_account_id, expense_date);
 CREATE INDEX idx_recurring_due ON recurring_fees(next_due_date, status);
 CREATE INDEX idx_recurring_project_due ON recurring_fees(project_id, next_due_date);
 CREATE INDEX idx_recurring_reminder ON recurring_fees(auto_create_reminder, status, next_due_date);
@@ -333,6 +361,12 @@ CREATE INDEX idx_activity_created ON activity_logs(created_at, id);
 
 INSERT INTO users (name, email, password_hash, role, status) VALUES
 ('Admin', 'admin@example.com', '$2y$10$LFP/NtrAmMCk5.KuxPcxl.qKTAssKdn1VreMkr.rnlKhrA56uE1zG', 'Admin', 'Active');
+
+INSERT INTO expense_categories (name, category_group, sort_order) VALUES
+('Staff Salary','Staff & People',10),('Contractor/Freelancer','Staff & People',20),('Bonus','Staff & People',30),('Employee Benefit','Staff & People',40),('Recruitment','Staff & People',50),('Training','Staff & People',60),('Developer Cost','Staff & People',70),('Design Cost','Staff & People',80),
+('AI Tools/Agents','Software & Technology',110),('SaaS Subscription','Software & Technology',120),('API Cost','Software & Technology',130),('Development Tools','Software & Technology',140),('Domain Purchase','Software & Technology',150),('Hosting Purchase','Software & Technology',160),('VPS Purchase','Software & Technology',170),('Server Cost','Software & Technology',180),('SSL Cost','Software & Technology',190),('SMS Cost','Software & Technology',200),('Software License','Software & Technology',210),
+('Office Rent','Office & Operations',310),('Electricity','Office & Operations',320),('Internet','Office & Operations',330),('Phone','Office & Operations',340),('Office Supplies','Office & Operations',350),('Equipment/Hardware','Office & Operations',360),('Repairs & Maintenance','Office & Operations',370),('Transport','Office & Operations',380),('Travel & Accommodation','Office & Operations',390),
+('Marketing/Advertising','Business Administration',410),('Bank/Payment Fees','Business Administration',420),('Tax','Business Administration',430),('Government/License Fees','Business Administration',440),('Legal','Business Administration',450),('Accounting','Business Administration',460),('Insurance','Business Administration',470),('Customer Entertainment','Business Administration',480),('Other','Other',999);
 
 INSERT INTO settings (setting_key, setting_value) VALUES
 ('company_name', 'Your Company Name'),

@@ -70,6 +70,9 @@ Get-Content -Raw database\migrate_v1_6_domain_renewal_dates.sql | C:\xampp\mysql
 Get-Content -Raw database\migrate_v1_7_unified_recurring_fees.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
 Get-Content -Raw database\migrate_v1_8_performance_indexes.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
 Get-Content -Raw database\migrate_v1_9_server_fee_cleanup.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
+Get-Content -Raw database\migrate_v1_10_invoice_installments.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
+Get-Content -Raw database\migrate_v1_11_manual_invoice_amounts.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
+Get-Content -Raw database\migrate_v1_12_company_financial.sql | C:\xampp\mysql\bin\mysql.exe -u root ksspm
 ~~~
 
 All migrations are idempotent. Do not import database/schema.sql over real data because it recreates the tables.

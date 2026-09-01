@@ -681,6 +681,27 @@ label {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.expense-summary {
+  margin-bottom: 20px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.analytics-grid .panel {
+  min-width: 0;
+}
+
+.category-manager > .form-grid {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
 .item-row {
   grid-column: 1 / -1;
   display: grid;
@@ -1634,6 +1655,9 @@ label {
 }
 
 @media (max-width: 680px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
   .filter-drawer { width: 100vw; }
   .filter-drawer-body input,
   .filter-drawer-body select,
@@ -1830,7 +1854,26 @@ label {
   .settings-band { align-items: stretch; flex-direction: column; }
 }
 
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
 @media print {
+  html,
+  body,
+  #root {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body.printing-invoice .page > :not(.invoice-print-workspace) {
+    display: none !important;
+  }
+
   .sidebar,
   .topbar,
   .toolbar,
@@ -1880,10 +1923,16 @@ label {
 
   .invoice-a4 {
     width: 210mm;
-    height: 297mm;
+    min-height: 297mm;
+    height: auto;
     margin: 0;
+    overflow: visible;
     box-shadow: none;
     transform: none !important;
+  }
+
+  .invoice-a4-inner.designed {
+    min-height: 297mm;
   }
 }
 

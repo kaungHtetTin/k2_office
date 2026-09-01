@@ -74,8 +74,8 @@ try {
 
     $migrationFiles = glob($databaseDirectory . DIRECTORY_SEPARATOR . 'migrate_v*.sql') ?: [];
     usort($migrationFiles, static function (string $left, string $right): int {
-        preg_match('/migrate_v1_(\d+)\.sql$/', basename($left), $leftVersion);
-        preg_match('/migrate_v1_(\d+)\.sql$/', basename($right), $rightVersion);
+        preg_match('/migrate_v1_(\d+)(?:_[^.]+)?\.sql$/', basename($left), $leftVersion);
+        preg_match('/migrate_v1_(\d+)(?:_[^.]+)?\.sql$/', basename($right), $rightVersion);
 
         return (int) ($leftVersion[1] ?? PHP_INT_MAX)
             <=> (int) ($rightVersion[1] ?? PHP_INT_MAX);

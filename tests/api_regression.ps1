@@ -125,9 +125,28 @@ try {
     Expect-Status 422 'POST' '/payments' @{ project_id = $projectAId; payment_date = $today; amount = 10; payment_type = 'Upfront'; payment_method = 'Cash'; is_historical = 2 }
     $paymentAId = [int](Invoke-Api 'POST' '/payments' @{ project_id = $projectAId; payment_date = $today; amount = 200; payment_type = 'Other'; payment_method = 'Cash'; financial_account_id = $alphaId }).id
     $paymentBId = [int](Invoke-Api 'POST' '/payments' @{ project_id = $projectBId; payment_date = $today; amount = 150; payment_type = 'Other'; payment_method = 'Cash'; financial_account_id = $betaId }).id
-    $expenseId = [int](Invoke-Api 'POST' '/expenses' @{ project_id = $projectAId; expense_date = $today; expense_category = 'Developer Cost'; amount = 40; paid_to = 'Regression Developer'; payment_method = 'Bank Transfer'; reference_number = 'EXP-REF'; notes = 'Regression expense note' }).id
+    $categories = Invoke-Api 'GET' '/expense-categories?all=1'
+    $developerCategoryId = [int]($categories | Where-Object name -eq 'Developer Cost' | Select-Object -First 1).id
+    $aiCategoryId = [int]($categories | Where-Object name -eq 'AI Tools/Agents' | Select-Object -First 1).id
+    Assert-True ($developerCategoryId -gt 0 -and $aiCategoryId -gt 0) 'Managed expense categories are seeded'
+    $expenseId = [int](Invoke-Api 'POST' '/expenses' @{ project_id = $projectAId; expense_date = $today; expense_scope = 'Project'; expense_category_id = $developerCategoryId; amount = 40; paid_to = 'Regression Developer'; payment_method = 'Bank Transfer'; financial_account_id = $alphaId; expense_status = 'Paid'; expense_frequency = 'One Time'; is_historical = 0; reference_number = 'EXP-REF'; notes = 'Regression expense note' }).id
     $expenseRecord = Invoke-Api 'GET' "/expenses/$expenseId"
     Assert-True ($expenseRecord.paid_to -eq 'Regression Developer' -and $expenseRecord.payment_method -eq 'Bank Transfer' -and $expenseRecord.reference_number -eq 'EXP-REF' -and $expenseRecord.notes -eq 'Regression expense note') 'Expense optional details persist'
+    $expenseMovements = Invoke-Api 'GET' '/financial-transactions?page=1&limit=500&transaction_type=Use'
+    Assert-True (@($expenseMovements.rows | Where-Object { [int]$_.expense_id -eq $expenseId }).Count -eq 1) 'Paid expense creates one linked account movement'
+    Expect-Status 422 'DELETE' "/financial-transactions/$((@($expenseMovements.rows | Where-Object { [int]$_.expense_id -eq $expenseId }) | Select-Object -First 1).id)"
+
+    $overheadId = [int](Invoke-Api 'POST' '/expenses' @{ expense_date = $today; expense_scope = 'Company'; expense_category_id = $aiCategoryId; amount = 25; paid_to = 'AI Vendor'; payment_method = 'Bank Transfer'; financial_account_id = $betaId; expense_status = 'Paid'; expense_frequency = 'Recurring'; billing_cycle = 'Monthly'; billing_period = (Get-Date -Format 'yyyy-MM'); is_historical = 0 }).id
+    $overhead = Invoke-Api 'GET' "/expenses/$overheadId"
+    Assert-True ($null -eq $overhead.project_id -and $overhead.expense_scope -eq 'Company') 'Company overhead does not require a project'
+    Invoke-Api 'PUT' "/expenses/$overheadId" @{ expense_date = $today; expense_scope = 'Company'; expense_category_id = $aiCategoryId; amount = 30; paid_to = 'AI Vendor'; payment_method = 'Bank Transfer'; expense_status = 'Unpaid'; expense_frequency = 'Recurring'; billing_cycle = 'Monthly'; billing_period = (Get-Date -Format 'yyyy-MM'); is_historical = 0 } | Out-Null
+    $usesAfterUnpaid = Invoke-Api 'GET' '/financial-transactions?page=1&limit=500&transaction_type=Use'
+    Assert-True (@($usesAfterUnpaid.rows | Where-Object { [int]$_.expense_id -eq $overheadId }).Count -eq 0) 'Changing a paid expense to unpaid reverses its account movement'
+    $expenseAnalytics = Invoke-Api 'GET' "/reports/expense-analytics?date_from=$today&date_to=$today"
+    Assert-True ([double]$expenseAnalytics.summary.this_month_expenses -ge 70) 'Expense analytics exposes the current-month total'
+    Assert-True ([double]$expenseAnalytics.summary.project_expenses -ge 40 -and [double]$expenseAnalytics.summary.overhead_expenses -ge 30) 'Expense analytics separates project costs and overhead'
+    Assert-True ([double]$expenseAnalytics.summary.staff_costs -ge 40 -and [double]$expenseAnalytics.summary.software_costs -ge 30) 'Expense analytics separates staff and software costs'
+    Invoke-Api 'DELETE' "/expenses/$overheadId" | Out-Null
 
     $summaryA = Invoke-Api 'GET' "/projects/$projectAId/summary"
     Assert-Money $summaryA.total_payable 950 'Project total payable'
@@ -160,12 +179,12 @@ try {
     Expect-Status 422 'POST' '/financial-transactions' @{ transaction_date = $today; transaction_type = 'Use'; from_account_id = $alphaId; amount = 1; notes = ('x' * 501) }
 
     $transferId = [int](Invoke-Api 'POST' '/financial-transactions' @{ transaction_date = $today; transaction_type = 'Transfer'; from_account_id = $alphaId; to_account_id = $betaId; amount = 50; notes = 'Regression transfer' }).id
-    $useId = [int](Invoke-Api 'POST' '/financial-transactions' @{ transaction_date = $today; transaction_type = 'Use'; from_account_id = $betaId; amount = 20; notes = 'Regression use' }).id
+    $useId = [int](Invoke-Api 'POST' '/financial-transactions' @{ transaction_date = $today; transaction_type = 'Use'; from_account_id = $betaId; amount = 20; manual_use_type = 'Owner Withdrawal'; notes = 'Regression use' }).id
     $transactionIds.Add($transferId); $transactionIds.Add($useId)
     $accounts = Invoke-Api 'GET' '/financial-accounts'
-    Assert-Money ($accounts | Where-Object id -eq $alphaId).balance 250 'Source account balance'
+    Assert-Money ($accounts | Where-Object id -eq $alphaId).balance 210 'Source account balance includes linked expense'
     Assert-Money ($accounts | Where-Object id -eq $betaId).balance 180 'Destination account balance'
-    Assert-Money (($accounts | Where-Object { [int]$_.id -in @($alphaId,$betaId) } | Measure-Object balance -Sum).Sum) 430 'Combined account balance'
+    Assert-Money (($accounts | Where-Object { [int]$_.id -in @($alphaId,$betaId) } | Measure-Object balance -Sum).Sum) 390 'Combined account balance'
 
     $receiptId = [int](Invoke-Api 'POST' '/receipts' @{ project_id = $projectAId; payment_id = $paymentAId; receipt_date = $today; amount = 120; payment_method = 'Cash'; received_from = 'Regression Customer'; notes = 'Internal acknowledgement' }).id
     Expect-Status 422 'POST' '/receipts' @{ project_id = $projectAId; payment_id = $paymentAId; receipt_date = $today; amount = 81; payment_method = 'Cash' }
@@ -310,7 +329,7 @@ try {
     Assert-Money $domainSummary.profit 190 'Project realized profit includes domain revenue and registrar cost'
     Assert-Money $domainSummary.expected_profit 940 'Project expected profit includes quoted domain revenue and registrar cost'
     $domainAccounts = Invoke-Api 'GET' '/financial-accounts'
-    Assert-Money ($domainAccounts | Where-Object id -eq $alphaId).balance 280 'Receiving and registrar account movements are synchronized'
+    Assert-Money ($domainAccounts | Where-Object id -eq $alphaId).balance 240 'Receiving, expense, and registrar account movements are synchronized'
     Assert-Money ($domainAccounts | Where-Object id -eq $betaId).balance 180 'Correcting registrar account restores the previous account'
 
     $domainOverview = Invoke-Api 'GET' "/reports/financial-overview?period=lifetime&project_id=$projectAId"
@@ -437,7 +456,7 @@ try {
     $staffHeaders = @{ Authorization = "Bearer $($staffLogin.data.token)" }
     Expect-Status 403 'GET' '/users' $null $staffHeaders
     Expect-Status 403 'POST' '/settings' @{ company_name = 'Forbidden staff update' } $staffHeaders
-    $staffTxId = [int](Invoke-Api 'POST' '/financial-transactions' @{ transaction_date = $today; transaction_type = 'Use'; from_account_id = $alphaId; amount = 5; notes = 'Staff audit reference' } $staffHeaders).id
+    $staffTxId = [int](Invoke-Api 'POST' '/financial-transactions' @{ transaction_date = $today; transaction_type = 'Use'; from_account_id = $alphaId; amount = 5; manual_use_type = 'Cash Adjustment'; notes = 'Staff audit reference' } $staffHeaders).id
     $transactionIds.Add($staffTxId)
     Invoke-Api 'DELETE' "/users/$staffId" | Out-Null
     $staffAfterDelete = @(Invoke-Api 'GET' '/users' | Where-Object { [int]$_.id -eq $staffId }) | Select-Object -First 1
@@ -447,7 +466,7 @@ try {
     Invoke-Api 'PUT' "/financial-accounts/$alphaId" @{ name = "Regression Alpha $stamp"; opening_balance = 100; status = 'Inactive' } | Out-Null
     Expect-Status 422 'POST' '/payments' @{ project_id = $projectAId; payment_date = $today; amount = 1; payment_type = 'Other'; payment_method = 'Cash'; financial_account_id = $alphaId }
     Invoke-Api 'PUT' "/payments/$paymentAId" @{ project_id = $projectAId; payment_date = $today; amount = 200; payment_type = 'Other'; payment_method = 'Cash'; financial_account_id = $alphaId } | Out-Null
-    Invoke-Api 'PUT' "/financial-transactions/$staffTxId" @{ transaction_date = $today; transaction_type = 'Use'; from_account_id = $alphaId; amount = 5; notes = 'Edited inactive-account history' } | Out-Null
+    Invoke-Api 'PUT' "/financial-transactions/$staffTxId" @{ transaction_date = $today; transaction_type = 'Use'; from_account_id = $alphaId; amount = 5; manual_use_type = 'Cash Adjustment'; notes = 'Edited inactive-account history' } | Out-Null
     Assert-True ((Invoke-Api 'GET' "/payments/$paymentAId").financial_account_id -eq $alphaId) 'Existing payment history must remain editable after its account is inactive'
     Assert-True ((Invoke-Api 'GET' "/financial-transactions/$staffTxId").from_account_id -eq $alphaId) 'Existing manual history must remain editable after its account is inactive'
     Invoke-Api 'PUT' "/financial-accounts/$alphaId" @{ name = "Regression Alpha $stamp"; opening_balance = 100; status = 'Active' } | Out-Null
