@@ -1,8 +1,6 @@
 -- KSSPM Version 1.8 maintenance: indexes for growing reminder and audit data.
 -- Safe to run more than once.
 
-USE ksspm;
-
 SET @has_index = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='projects' AND INDEX_NAME='idx_projects_domain_reminder');
 SET @sql = IF(@has_index=0, 'CREATE INDEX idx_projects_domain_reminder ON projects(domain_reminder_date)', 'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;

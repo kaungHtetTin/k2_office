@@ -1,5 +1,3 @@
-USE ksspm;
-
 ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS domain_purchase_date DATE AFTER domain_name,
     ADD COLUMN IF NOT EXISTS domain_reminder_date DATE AFTER domain_purchase_date,

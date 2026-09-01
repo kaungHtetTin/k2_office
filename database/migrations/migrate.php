@@ -8,6 +8,57 @@ if (PHP_SAPI !== 'cli') {
 
 $projectRoot = dirname(__DIR__, 2);
 $databaseDirectory = dirname(__DIR__);
+$environmentFile = $projectRoot . DIRECTORY_SEPARATOR . '.env';
+
+if (is_file($environmentFile)) {
+    $lines = file($environmentFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        fwrite(STDERR, 'Cannot read the project .env file.' . PHP_EOL);
+        exit(1);
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+
+        if (str_starts_with($line, 'export ')) {
+            $line = trim(substr($line, 7));
+        }
+
+        $separator = strpos($line, '=');
+        if ($separator === false) {
+            continue;
+        }
+
+        $key = trim(substr($line, 0, $separator));
+        $value = trim(substr($line, $separator + 1));
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key)) {
+            continue;
+        }
+
+        if (strlen($value) >= 2) {
+            $first = $value[0];
+            $last = $value[strlen($value) - 1];
+            if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+                $value = substr($value, 1, -1);
+                if ($first === '"') {
+                    $value = stripcslashes($value);
+                }
+            }
+        }
+
+        // Values supplied by the server or command line take priority over .env.
+        if (getenv($key) !== false) {
+            continue;
+        }
+
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
 
 require $projectRoot . DIRECTORY_SEPARATOR . 'backend' . DIRECTORY_SEPARATOR
     . 'config' . DIRECTORY_SEPARATOR . 'database.php';

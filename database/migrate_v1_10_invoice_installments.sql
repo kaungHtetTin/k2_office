@@ -1,8 +1,6 @@
 -- KSSPM Version 1.10: installment-aware invoices and editable payment header notes.
 -- Safe to run more than once.
 
-USE ksspm;
-
 ALTER TABLE invoices
     ADD COLUMN IF NOT EXISTS previously_paid_amount DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER balance_amount,
     ADD COLUMN IF NOT EXISTS remaining_project_amount DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER previously_paid_amount,

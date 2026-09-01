@@ -2,8 +2,6 @@
 -- Removes obsolete project-generated hosting/server rows and labels domain periods as Server fees.
 -- Safe to run more than once.
 
-USE ksspm;
-
 DELETE rr
 FROM resolved_reminders rr
 JOIN recurring_fees rf ON rf.id=rr.record_id

@@ -1,5 +1,3 @@
-USE ksspm;
-
 CREATE TABLE IF NOT EXISTS domain_billing_periods (
     id INT AUTO_INCREMENT PRIMARY KEY,
     project_id INT NOT NULL,

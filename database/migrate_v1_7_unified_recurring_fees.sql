@@ -1,8 +1,6 @@
 -- KSSPM Version 1.7: identify project-generated recurring fees.
 -- Safe to run more than once.
 
-USE ksspm;
-
 SET @has_source_type = (
     SELECT COUNT(*) FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'recurring_fees' AND COLUMN_NAME = 'source_type'

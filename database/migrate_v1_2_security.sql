@@ -1,5 +1,3 @@
-USE ksspm;
-
 CREATE TABLE IF NOT EXISTS login_attempts (
     attempt_key CHAR(64) PRIMARY KEY,
     failed_count INT NOT NULL DEFAULT 0,

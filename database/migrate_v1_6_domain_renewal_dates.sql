@@ -1,5 +1,3 @@
-USE ksspm;
-
 SET @column_exists = (
     SELECT COUNT(*)
     FROM information_schema.COLUMNS
