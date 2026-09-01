@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS ksspm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE ksspm;
-
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS activity_logs;
 DROP TABLE IF EXISTS resolved_reminders;

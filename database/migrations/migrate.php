@@ -102,6 +102,17 @@ try {
             throw new RuntimeException("Cannot read {$migrationName}");
         }
 
+        // The PDO connection already selects DB_NAME from .env. Ignore legacy
+        // USE statements so a migration cannot switch to a hardcoded database.
+        $sql = preg_replace(
+            '/^\s*USE\s+`?[A-Za-z0-9_$-]+`?\s*;\s*$/im',
+            '',
+            $sql
+        );
+        if ($sql === null) {
+            throw new RuntimeException("Cannot prepare {$migrationName}");
+        }
+
         fwrite(STDOUT, "RUN   {$migrationName}" . PHP_EOL);
         $pdo->exec($sql);
         $recordMigration->execute(['migration' => $migrationName]);
