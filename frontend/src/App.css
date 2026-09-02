@@ -435,6 +435,13 @@ button:disabled {
   grid-column: auto;
 }
 
+/* The normal toolbar search spans two grid columns. A drawer has one column,
+   so reset that span or CSS Grid creates an implicit column and overlaps the
+   following controls. */
+.filter-drawer-body .filters > input[type='search']:first-child {
+  grid-column: 1 / -1;
+}
+
 .filter-drawer-body .report-filter-scroll { overflow: visible; padding: 0; }
 .filter-drawer-body .report-filter-fields { display: grid; width: 100%; min-width: 0; }
 .filter-drawer-body .report-filter-project .project-picker { grid-template-columns: 1fr; }
